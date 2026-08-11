@@ -1,0 +1,96 @@
+/* ContentAI custom styles */
+.btn-gradient {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border: none;
+    transition: opacity 0.2s;
+}
+.btn-gradient:hover { opacity: 0.9; }
+
+.gradient-text {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.card-glass {
+    background: rgba(255,255,255,0.05);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255,255,255,0.1);
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+.card-glass:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 20px rgba(102,126,234,0.15);
+}
+
+.result-card {
+    border-left: 3px solid #667eea;
+}
+
+.copy-btn { cursor: pointer; }
+.copy-btn:hover { color: #667eea; }
+
+/* ── Social platform cards ─────────────────────── */
+.social-card {
+    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+.social-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 24px rgba(102,126,234,0.25);
+}
+.social-card.social-connected {
+    border-color: rgba(25,135,84,0.5);
+}
+
+.social-icon {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.6rem;
+    color: #fff;
+    background: linear-gradient(135deg, var(--social-color), rgba(0,0,0,0.45));
+    box-shadow: 0 4px 14px rgba(0,0,0,0.3);
+    transition: transform 0.2s ease;
+}
+.social-card:hover .social-icon {
+    transform: scale(1.1);
+}
+
+.status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #fff;
+    display: inline-block;
+    animation: statusPulse 1.6s ease-in-out infinite;
+}
+
+@keyframes statusPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.35; }
+}
+
+/* Loading spinner overlay */
+.social-card .btn[disabled] {
+    cursor: wait;
+}
+
+/* Toast-like alerts */
+#social-error, #social-success, #upload-error {
+    animation: fadeSlideDown 0.3s ease;
+}
+
+@keyframes fadeSlideDown {
+    from { opacity: 0; transform: translateY(-6px); }
+    to { opacity: 1; transform: translateY(0); }
+}

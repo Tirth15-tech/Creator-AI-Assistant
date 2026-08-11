@@ -1,0 +1,45 @@
+# Phase 1 - Foundation
+fastapi>=0.115.0
+uvicorn[standard]>=0.34.0
+sqlalchemy>=2.0.36
+alembic>=1.14.0
+# psycopg2-binary>=2.9.10  # uncomment when using PostgreSQL
+python-jose[cryptography]>=3.3.0
+passlib[bcrypt]>=1.7.4
+bcrypt>=4.0.0,<5.0.0
+pydantic-settings>=2.7.0
+pydantic[email]>=2.10.0
+python-multipart>=0.0.20
+jinja2>=3.1.0
+
+# Phase 2 - AI Models & Media
+torch>=2.13.0
+torchvision>=0.28.0
+ultralytics>=8.4.0
+transformers>=5.0.0
+httpx>=0.28.0
+Pillow>=12.0.0
+opencv-python>=5.0.0
+numpy>=2.0.0
+
+# Phase 3 - Documents, OCR, Translation
+PyMuPDF>=1.25.0
+python-docx>=1.1.0
+easyocr>=1.7.0
+
+# Phase 4 - Video & Audio
+faster-whisper>=1.2.0
+imageio-ffmpeg>=0.6.0
+av>=11.0.0
+pydub>=0.25.1
+
+# Phase 3 Social Media Integration
+httpx>=0.28.0            # OAuth and Graph API calls
+apscheduler>=3.10.0      # Background scheduler (optional, or use asyncio)
+
+# Export
+reportlab>=4.2.0         # PDF generation
+
+# Testing
+pytest>=8.0.0
+httpx>=0.28.0

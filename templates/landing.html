@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}ContentAI - AI Social Media Assistant{% endblock %}
+{% block content %}
+<div class="row justify-content-center align-items-center" style="min-height: 70vh;">
+    <div class="col-lg-8 text-center">
+        <h1 class="display-3 fw-bold mb-3 gradient-text">ContentAI</h1>
+        <p class="lead text-muted mb-4">Your AI-powered social media content assistant. Upload images, video, audio, or documents and get optimized captions, hashtags, keywords, emojis, hooks, CTAs, and more.</p>
+        <div class="d-flex justify-content-center gap-3">
+            <a href="/register" class="btn btn-gradient btn-lg px-5">Get Started Free</a>
+            <a href="/login" class="btn btn-outline-light btn-lg px-5">Login</a>
+        </div>
+        <div class="row mt-5 g-4">
+            <div class="col-md-4">
+                <div class="card card-glass p-4 h-100">
+                    <i class="bi bi-image display-4 gradient-text mb-3"></i>
+                    <h5>Image Analysis</h5>
+                    <p class="text-muted small mb-0">YOLOv8, CLIP & BLIP-2 detect objects, scenes, and generate rich descriptions.</p>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card card-glass p-4 h-100">
+                    <i class="bi bi-megaphone display-4 gradient-text mb-3"></i>
+                    <h5>Smart Captions</h5>
+                    <p class="text-muted small mb-0">Gemma 3 generates captions, hashtags, emojis, CTAs, and SEO tags.</p>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card card-glass p-4 h-100">
+                    <i class="bi bi-globe display-4 gradient-text mb-3"></i>
+                    <h5>Multilingual</h5>
+                    <p class="text-muted small mb-0">Translate your content into multiple languages with one click.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

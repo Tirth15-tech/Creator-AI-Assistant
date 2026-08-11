@@ -1,0 +1,1111 @@
+{% extends "base.html" %}
+{% block title %}Dashboard - ContentAI{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="mb-0"><i class="bi bi-speedometer2"></i> Dashboard</h2>
+    <div class="d-flex align-items-center gap-3">
+        <span class="text-muted" id="user-email"></span>
+        <a href="#" class="text-muted text-decoration-none small" onclick="clearTokens(); window.location.href='/login';">
+            <i class="bi bi-box-arrow-right"></i> Logout
+        </a>
+    </div>
+</div>
+
+<!-- Tabs -->
+<ul class="nav nav-pills mb-4" role="tablist">
+    <li class="nav-item">
+        <button class="nav-link active" data-bs-toggle="pill" data-bs-target="#tab-create" type="button">
+            <i class="bi bi-magic"></i> Create Content
+        </button>
+    </li>
+    <li class="nav-item">
+        <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tab-translate" type="button">
+            <i class="bi bi-translate"></i> Translate
+        </button>
+    </li>
+    <li class="nav-item">
+        <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tab-rewrite" type="button">
+            <i class="bi bi-pencil-square"></i> Rewrite
+        </button>
+    </li>
+    <li class="nav-item">
+        <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tab-social" type="button">
+            <i class="bi bi-share"></i> Social
+        </button>
+    </li>
+    <li class="nav-item">
+        <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tab-analytics" type="button">
+            <i class="bi bi-bar-chart"></i> Analytics
+        </button>
+    </li>
+</ul>
+
+<div class="tab-content">
+<!-- Create Content Tab -->
+<div class="tab-pane fade show active" id="tab-create">
+    <div class="card card-glass p-4 mb-4">
+        <h5 class="mb-3"><i class="bi bi-cloud-upload"></i> Create New Content</h5>
+        <div id="upload-error" class="alert alert-danger d-none"></div>
+        <form id="upload-form" enctype="multipart/form-data">
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label" for="media-file">Upload Media</label>
+                    <input type="file" class="form-control" id="media-file" name="media_file"
+                           autocomplete="off"
+                           accept="image/jpeg,image/png,image/webp,image/gif,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,video/mp4,video/quicktime,video/webm,audio/mpeg,audio/wav,audio/ogg,audio/mp4">
+                    <div class="form-text">Images, PDF, DOCX, Video (max 2 min), Audio - max 100MB</div>
+                    <div id="image-preview" class="mt-2 d-none">
+                        <img id="preview-img" src="" class="img-fluid rounded" style="max-height:200px">
+                    </div>
+                    <div id="file-info" class="mt-2 d-none text-muted small"></div>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label" for="media-text">Text Content (optional)</label>
+                    <textarea class="form-control" id="media-text" name="media_text" autocomplete="off" rows="5"
+                        placeholder="Paste your text, caption draft, or describe what you want to post about..."></textarea>
+                </div>
+                <div class="col-12">
+                    <button type="submit" class="btn btn-gradient px-4" id="generate-btn">
+                        <span class="spinner-border spinner-border-sm d-none" id="gen-spinner"></span>
+                        <i class="bi bi-magic"></i> Generate Content
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+    <div id="results-section" class="d-none">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h5><i class="bi bi-stars"></i> Generated Content</h5>
+            <div class="d-flex gap-2">
+                <button class="btn btn-outline-light btn-sm" onclick="copyAll()">
+                    <i class="bi bi-clipboard"></i> Copy All
+                </button>
+                <div class="dropdown">
+                    <button class="btn btn-outline-light btn-sm dropdown-toggle" data-bs-toggle="dropdown">
+                        <i class="bi bi-download"></i> Export
+                    </button>
+                    <ul class="dropdown-menu">
+                        <li><a class="dropdown-item" href="#" onclick="exportPost('txt')"><i class="bi bi-file-text me-2"></i>Text (.txt)</a></li>
+                        <li><a class="dropdown-item" href="#" onclick="exportPost('csv')"><i class="bi bi-filetype-csv me-2"></i>CSV (.csv)</a></li>
+                        <li><a class="dropdown-item" href="#" onclick="exportPost('docx')"><i class="bi bi-file-earmark-word me-2"></i>Word (.docx)</a></li>
+                        <li><a class="dropdown-item" href="#" onclick="exportPost('pdf')"><i class="bi bi-filetype-pdf me-2"></i>PDF (.pdf)</a></li>
+                        <li><a class="dropdown-item" href="#" onclick="exportPost('json')"><i class="bi bi-filetype-json me-2"></i>JSON (.json)</a></li>
+                    </ul>
+                </div>
+                <button class="btn btn-outline-info btn-sm" id="quality-btn" onclick="checkQuality()">
+                    <i class="bi bi-clipboard2-pulse"></i> Quality
+                </button>
+            </div>
+        </div>
+        <div id="quality-report" class="d-none mb-3"></div>
+        <div class="row g-3" id="results-container"></div>
+    </div>
+</div>
+
+<!-- Translate Tab -->
+<div class="tab-pane fade" id="tab-translate">
+    <div class="card card-glass p-4">
+        <h5 class="mb-3"><i class="bi bi-translate"></i> Translate Content</h5>
+        <p class="text-muted small">Select a previously generated post and translate its caption & summary to another language.</p>
+        <div class="row g-3 mb-3">
+            <div class="col-md-6">
+                <label class="form-label" for="translate-post-select">Select Post</label>
+                <select class="form-select" id="translate-post-select" name="post_id">
+                    <option value="">-- Choose a post --</option>
+                </select>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label" for="translate-lang">Target Language</label>
+                <select class="form-select" id="translate-lang" name="target_language">
+                    <option value="English">English</option>
+                    <option value="Hindi">Hindi</option>
+                    <option value="Gujarati">Gujarati</option>
+                    <option value="Marathi">Marathi</option>
+                    <option value="Tamil">Tamil</option>
+                    <option value="Sanskrit">Sanskrit</option>
+                    <option value="Spanish">Spanish</option>
+                    <option value="French">French</option>
+                    <option value="German">German</option>
+                    <option value="Italian">Italian</option>
+                    <option value="Portuguese">Portuguese</option>
+                    <option value="Japanese">Japanese</option>
+                    <option value="Korean">Korean</option>
+                    <option value="Chinese (Simplified)">Chinese (Simplified)</option>
+                    <option value="Arabic">Arabic</option>
+                    <option value="Russian">Russian</option>
+                    <option value="Dutch">Dutch</option>
+                    <option value="Turkish">Turkish</option>
+                    <option value="Thai">Thai</option>
+                    <option value="Vietnamese">Vietnamese</option>
+                </select>
+            </div>
+            <div class="col-md-2 d-flex align-items-end">
+                <button class="btn btn-gradient w-100" id="translate-btn" onclick="doTranslate()">
+                    <span class="spinner-border spinner-border-sm d-none" id="trans-spinner"></span>
+                    Translate
+                </button>
+            </div>
+        </div>
+        <div id="translate-error" class="alert alert-danger d-none"></div>
+        <div id="translate-result" class="d-none">
+            <label class="form-label">Translation</label>
+            <textarea class="form-control" id="translate-output" rows="6" readonly></textarea>
+            <button class="btn btn-outline-light btn-sm mt-2" onclick="navigator.clipboard.writeText(document.getElementById('translate-output').value)">
+                <i class="bi bi-clipboard"></i> Copy Translation
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Rewrite Tab -->
+<div class="tab-pane fade" id="tab-rewrite">
+    <div class="card card-glass p-4">
+        <h5 class="mb-3"><i class="bi bi-pencil-square"></i> Content Rewrite</h5>
+        <p class="text-muted small">Paste any text and have AI rewrite it for a different tone or length.</p>
+        <div class="row g-3 mb-3">
+            <div class="col-12">
+                <label class="form-label" for="rewrite-input">Original Text</label>
+                <textarea class="form-control" id="rewrite-input" name="text" autocomplete="off" rows="4" placeholder="Paste text to rewrite..."></textarea>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label" for="rewrite-tone">Tone</label>
+                <select class="form-select" id="rewrite-tone" name="tone">
+                    <option value="professional">Professional</option>
+                    <option value="casual">Casual</option>
+                    <option value="funny">Funny</option>
+                    <option value="inspirational">Inspirational</option>
+                    <option value="urgent">Urgent</option>
+                    <option value="luxury">Luxury</option>
+                    <option value="minimalist">Minimalist</option>
+                    <option value="storytelling">Storytelling</option>
+                </select>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label" for="rewrite-length">Length</label>
+                <select class="form-select" id="rewrite-length" name="length">
+                    <option value="short">Short (1-2 sentences)</option>
+                    <option value="medium">Medium (3-4 sentences)</option>
+                    <option value="long">Long (detailed paragraph)</option>
+                    <option value="very long">Very Long (multi-paragraph)</option>
+                </select>
+            </div>
+            <div class="col-md-4 d-flex align-items-end">
+                <button class="btn btn-gradient w-100" id="rewrite-btn" onclick="doRewrite()">
+                    <span class="spinner-border spinner-border-sm d-none" id="rewrite-spinner"></span>
+                    Rewrite
+                </button>
+            </div>
+        </div>
+        <div id="rewrite-error" class="alert alert-danger d-none"></div>
+        <div id="rewrite-result" class="d-none">
+            <label class="form-label">Rewritten Content</label>
+            <textarea class="form-control" id="rewrite-output" rows="6" readonly></textarea>
+            <button class="btn btn-outline-light btn-sm mt-2" onclick="navigator.clipboard.writeText(document.getElementById('rewrite-output').value)">
+                <i class="bi bi-clipboard"></i> Copy
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Social Tab -->
+<div class="tab-pane fade" id="tab-social">
+    <div class="card card-glass p-4 mb-4">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h5 class="mb-0"><i class="bi bi-globe2"></i> Connect Social Accounts</h5>
+            <button class="btn btn-outline-light btn-sm" onclick="loadSocialAccounts()">
+                <i class="bi bi-arrow-clockwise"></i> Refresh
+            </button>
+        </div>
+        <div id="social-error" class="alert alert-danger d-none"></div>
+        <div id="social-success" class="alert alert-success d-none"></div>
+        <div class="row g-3" id="social-cards">
+            <!-- Platform cards rendered by JS -->
+        </div>
+        <div id="social-accounts-list" class="mt-3">
+            <p class="text-muted small">Loading accounts...</p>
+        </div>
+    </div>
+
+    <div class="card card-glass p-4 mb-4">
+        <h5 class="mb-3"><i class="bi bi-send"></i> Post to Social Media</h5>
+        <div class="row g-3">
+            <div class="col-md-4">
+                <label class="form-label" for="social-post-account">Account</label>
+                <select class="form-select" id="social-post-account" name="account_id">
+                    <option value="">-- Select account --</option>
+                </select>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label" for="social-post-source">From Post</label>
+                <select class="form-select" id="social-post-source" name="post_id">
+                    <option value="">-- Select generated post --</option>
+                </select>
+            </div>
+            <div class="col-md-4 d-flex align-items-end gap-2">
+                <button class="btn btn-gradient" onclick="openPostPreview()">
+                    <i class="bi bi-eye"></i> Preview &amp; Publish
+                </button>
+                <button class="btn btn-outline-info" onclick="scheduleSocialPost()">
+                    <i class="bi bi-calendar"></i> Schedule
+                </button>
+            </div>
+        </div>
+        <div id="social-post-error" class="alert alert-danger d-none mt-2"></div>
+        <div id="social-post-success" class="alert alert-success d-none mt-2"></div>
+    </div>
+
+    <div class="card card-glass p-4">
+        <h5 class="mb-3"><i class="bi bi-clock-history"></i> Schedule</h5>
+        <div class="row g-3 mb-3">
+            <div class="col-md-4">
+                <label class="form-label" for="social-schedule-account">Account</label>
+                <select class="form-select" id="social-schedule-account" name="account_id">
+                    <option value="">-- Select account --</option>
+                </select>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label" for="social-schedule-datetime">Date & Time</label>
+                <input type="datetime-local" class="form-control" id="social-schedule-datetime" name="scheduled_at" autocomplete="off">
+            </div>
+            <div class="col-md-4 d-flex align-items-end">
+                <button class="btn btn-gradient" onclick="openScheduleModal()">
+                    <i class="bi bi-calendar-plus"></i> Schedule from Draft
+                </button>
+            </div>
+        </div>
+        <div id="social-schedule-list">
+            <p class="text-muted small">Loading scheduled posts...</p>
+        </div>
+    </div>
+</div>
+
+<!-- Analytics Tab -->
+<div class="tab-pane fade" id="tab-analytics">
+    <div class="row g-3 mb-4" id="analytics-cards">
+        <div class="col-md-3">
+            <div class="card card-glass p-3 text-center">
+                <h3 class="gradient-text mb-0" id="ana-total-posts">-</h3>
+                <small class="text-muted">Total Posts</small>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card card-glass p-3 text-center">
+                <h3 class="gradient-text mb-0" id="ana-total-generated">-</h3>
+                <small class="text-muted">Content Generated</small>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card card-glass p-3 text-center">
+                <h3 class="gradient-text mb-0" id="ana-total-published">-</h3>
+                <small class="text-muted">Published</small>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card card-glass p-3 text-center">
+                <h3 class="gradient-text mb-0" id="ana-avg-viral">-</h3>
+                <small class="text-muted">Avg Viral Score</small>
+            </div>
+        </div>
+    </div>
+    <div class="row g-3" id="analytics-extra">
+        <div class="col-md-6">
+            <div class="card card-glass p-3">
+                <h6><i class="bi bi-pie-chart"></i> Content by Type</h6>
+                <div id="ana-content-types" class="text-muted small">Loading...</div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card card-glass p-3">
+                <h6><i class="bi bi-activity"></i> Engagement (30d)</h6>
+                <div id="ana-engagement" class="text-muted small">Loading...</div>
+            </div>
+        </div>
+    </div>
+</div>
+</div>
+
+<!-- Schedule Modal -->
+<div class="modal fade" id="scheduleModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-calendar-plus"></i> Schedule Post</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label" for="modal-schedule-account">Account</label>
+                    <select class="form-select" id="modal-schedule-account" name="account_id"></select>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label" for="modal-schedule-caption">Caption</label>
+                    <textarea class="form-control" id="modal-schedule-caption" name="caption" rows="3"></textarea>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label" for="modal-schedule-hashtags">Hashtags</label>
+                    <input class="form-control" id="modal-schedule-hashtags" name="hashtags" autocomplete="off">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label" for="modal-schedule-datetime">Schedule Date & Time</label>
+                    <input type="datetime-local" class="form-control" id="modal-schedule-datetime" name="scheduled_at" autocomplete="off">
+                </div>
+                <div id="schedule-error" class="alert alert-danger d-none"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button class="btn btn-gradient" onclick="confirmSchedule()">
+                    <i class="bi bi-calendar-check"></i> Schedule
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- History -->
+<div class="mt-5">
+    <h5 class="mb-3"><i class="bi bi-clock-history"></i> Recent History</h5>
+    <div id="history-container" class="text-muted small">Loading...</div>
+</div>
+
+<!-- Result Card Template -->
+<template id="result-card-template">
+    <div class="col-md-6 col-lg-4">
+        <div class="card card-glass result-card h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                    <h6 class="card-title text-capitalize mb-0" id="field-label"></h6>
+                    <div class="dropdown">
+                        <button class="btn btn-sm btn-link text-muted p-0" data-bs-toggle="dropdown">
+                            <i class="bi bi-three-dots-vertical"></i>
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li><a class="dropdown-item copy-field" href="#"><i class="bi bi-clipboard me-2"></i>Copy</a></li>
+                            <li><a class="dropdown-item regenerate-field" href="#"><i class="bi bi-arrow-clockwise me-2"></i>Regenerate</a></li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="field-value text-white small" style="white-space:pre-wrap; word-break:break-word;"></div>
+            </div>
+            <div class="card-footer bg-transparent border-top-0 pt-0">
+                <div class="input-group input-group-sm d-none edit-group">
+                    <textarea class="form-control form-control-sm edit-input" rows="2"></textarea>
+                    <button class="btn btn-gradient btn-sm save-edit"><i class="bi bi-check"></i></button>
+                    <button class="btn btn-outline-secondary btn-sm cancel-edit"><i class="bi bi-x"></i></button>
+                </div>
+                <div class="d-flex gap-2 action-buttons">
+                    <button class="btn btn-outline-secondary btn-sm flex-fill edit-btn">
+                        <i class="bi bi-pencil"></i> Edit
+                    </button>
+                    <button class="btn btn-outline-secondary btn-sm flex-fill copy-btn">
+                        <i class="bi bi-clipboard"></i> Copy
+                    </button>
+                    <button class="btn btn-outline-secondary btn-sm flex-fill regen-btn">
+                        <i class="bi bi-arrow-clockwise"></i> Regen
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</template>
+{% endblock %}
+{% block extra_js %}
+<script>
+let currentPostId = null;
+let allPosts = [];
+const fieldLabels = {
+    caption: 'Caption', hashtags: 'Hashtags', keywords: 'Keywords',
+    emojis: 'Emojis', cta: 'Call to Action', hook: 'Hook',
+    seo_tags: 'SEO Tags', summary: 'Summary'
+};
+
+document.getElementById('media-file').addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const isImage = file.type.startsWith('image/');
+    const isVideo = file.type.startsWith('video/');
+    const isAudio = file.type.startsWith('audio/');
+    document.getElementById('image-preview').classList.add('d-none');
+    document.getElementById('file-info').classList.add('d-none');
+
+    if (isImage) {
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+            document.getElementById('preview-img').src = ev.target.result;
+            document.getElementById('image-preview').classList.remove('d-none');
+        };
+        reader.readAsDataURL(file);
+    } else if (isVideo) {
+        const ext = file.name.split('.').pop().toUpperCase();
+        document.getElementById('file-info').textContent = `Video: ${file.name} (${ext}, ${(file.size/1024/1024).toFixed(1)} MB)`;
+        document.getElementById('file-info').classList.remove('d-none');
+    } else if (isAudio) {
+        const ext = file.name.split('.').pop().toUpperCase();
+        document.getElementById('file-info').textContent = `Audio: ${file.name} (${ext}, ${(file.size/1024/1024).toFixed(1)} MB)`;
+        document.getElementById('file-info').classList.remove('d-none');
+    } else {
+        document.getElementById('file-info').textContent = `Document: ${file.name} (${(file.size/1024).toFixed(0)} KB)`;
+        document.getElementById('file-info').classList.remove('d-none');
+    }
+});
+
+document.getElementById('upload-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = document.getElementById('generate-btn');
+    const spinner = document.getElementById('gen-spinner');
+    const errDiv = document.getElementById('upload-error');
+    errDiv.classList.add('d-none');
+    btn.disabled = true;
+    spinner.classList.remove('d-none');
+
+    const formData = new FormData();
+    const file = document.getElementById('media-file').files[0];
+    const text = document.getElementById('media-text').value;
+
+    if (!file && !text.trim()) {
+        errDiv.textContent = 'Please provide a file or text content.';
+        errDiv.classList.remove('d-none');
+        btn.disabled = false;
+        spinner.classList.add('d-none');
+        return;
+    }
+
+    if (file) formData.append('file', file);
+    formData.append('text', text);
+
+    try {
+        const res = await fetch('/api/posts/upload', {
+            method: 'POST', headers: authHeaders(), body: formData
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Generation failed');
+        currentPostId = data.post.id;
+        renderResults(data.generated);
+        loadHistory();
+    } catch (err) {
+        errDiv.textContent = err.message;
+        errDiv.classList.remove('d-none');
+    } finally {
+        btn.disabled = false;
+        spinner.classList.add('d-none');
+    }
+});
+
+function renderResults(gen) {
+    gen = gen || {};
+    const container = document.getElementById('results-container');
+    container.innerHTML = '';
+    document.getElementById('results-section').classList.remove('d-none');
+    for (const [field, label] of Object.entries(fieldLabels)) {
+        const tpl = document.getElementById('result-card-template').content.cloneNode(true);
+        const card = tpl.querySelector('.col-md-6');
+        card.dataset.field = field;
+        card.querySelector('#field-label').textContent = label;
+        card.querySelector('.field-value').textContent = gen[field] || '(empty)';
+        card.querySelector('.edit-btn').addEventListener('click', () => toggleEdit(card, true));
+        card.querySelector('.cancel-edit').addEventListener('click', () => toggleEdit(card, false));
+        card.querySelector('.save-edit').addEventListener('click', () => saveEdit(card));
+        card.querySelector('.regen-btn').addEventListener('click', () => regenerateField(card));
+        card.querySelector('.copy-btn').addEventListener('click', () => copyFieldValue(card));
+        card.querySelector('.copy-field').addEventListener('click', (e) => { e.preventDefault(); copyFieldValue(card); });
+        card.querySelector('.regenerate-field').addEventListener('click', (e) => { e.preventDefault(); regenerateField(card); });
+        container.appendChild(tpl);
+    }
+}
+
+function toggleEdit(card, show) {
+    card.querySelector('.edit-group').classList.toggle('d-none', !show);
+    card.querySelector('.action-buttons').classList.toggle('d-none', show);
+    if (show) card.querySelector('.edit-input').value = card.querySelector('.field-value').textContent;
+}
+
+async function saveEdit(card) {
+    const field = card.dataset.field;
+    const value = card.querySelector('.edit-input').value;
+    try {
+        const fd = new FormData(); fd.append('field', field); fd.append('value', value);
+        const res = await fetch(`/api/posts/${currentPostId}/update`, { method: 'POST', headers: authHeaders(), body: fd });
+        if (!res.ok) throw new Error('Save failed');
+        card.querySelector('.field-value').textContent = value;
+        toggleEdit(card, false);
+    } catch (err) { alert(err.message); }
+}
+
+async function regenerateField(card) {
+    const field = card.dataset.field;
+    const btn = card.querySelector('.regen-btn');
+    const orig = btn.innerHTML;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+    btn.disabled = true;
+    try {
+        const fd = new FormData(); fd.append('field', field);
+        const res = await fetch(`/api/posts/${currentPostId}/regenerate`, { method: 'POST', headers: authHeaders(), body: fd });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Regen failed');
+        card.querySelector('.field-value').textContent = data.value;
+    } catch (err) { alert(err.message); }
+    finally { btn.innerHTML = orig; btn.disabled = false; }
+}
+
+function copyFieldValue(cardOrBtn) {
+    const card = cardOrBtn.closest ? cardOrBtn.closest('.col-md-6') : cardOrBtn;
+    if (!card) return;
+    const text = card.querySelector('.field-value').textContent;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(() => {
+            showCopiedFeedback(card);
+        }).catch(() => {
+            fallbackCopy(text, card);
+        });
+    } else {
+        fallbackCopy(text, card);
+    }
+}
+
+function fallbackCopy(text, card) {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.left = '-9999px';
+    document.body.appendChild(ta);
+    ta.select();
+    try {
+        document.execCommand('copy');
+        showCopiedFeedback(card);
+    } catch (e) {
+        alert('Copy failed. Please select and copy manually.');
+    }
+    document.body.removeChild(ta);
+}
+
+function showCopiedFeedback(card) {
+    const btn = card.querySelector('.copy-btn');
+    if (btn) {
+        const orig = btn.innerHTML;
+        btn.innerHTML = '<i class="bi bi-check"></i> Copied';
+        setTimeout(() => btn.innerHTML = orig, 1500);
+    }
+}
+
+function copyAll() {
+    let text = '';
+    document.querySelectorAll('#results-container .col-md-6').forEach(card => {
+        text += `${fieldLabels[card.dataset.field]}:\n${card.querySelector('.field-value').textContent}\n\n`;
+    });
+    const trimmed = text.trim();
+    const btn = document.querySelector('#results-section .btn-outline-light');
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(trimmed).then(() => {
+            if (btn) { const orig = btn.innerHTML; btn.innerHTML = '<i class="bi bi-check"></i> Copied All'; setTimeout(() => btn.innerHTML = orig, 1500); }
+        }).catch(() => {
+            const ta = document.createElement('textarea'); ta.value = trimmed; ta.style.position = 'fixed'; ta.style.left = '-9999px';
+            document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
+            if (btn) { const orig = btn.innerHTML; btn.innerHTML = '<i class="bi bi-check"></i> Copied All'; setTimeout(() => btn.innerHTML = orig, 1500); }
+        });
+    }
+}
+
+async function exportPost(fmt) {
+    if (!currentPostId) return;
+    try {
+        const res = await fetch(`/api/posts/${currentPostId}/export/${fmt}`, { headers: authHeaders() });
+        if (!res.ok) {
+            const data = await res.json().catch(() => ({}));
+            alert(data.detail || 'Export failed');
+            return;
+        }
+        const blob = await res.blob();
+        const disposition = res.headers.get('Content-Disposition') || '';
+        const match = disposition.match(/filename=(.+)/);
+        const filename = match ? match[1] : `contentai_post_${currentPostId}.${fmt}`;
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = filename;
+        document.body.appendChild(a); a.click();
+        document.body.removeChild(a); URL.revokeObjectURL(url);
+    } catch (err) { alert('Export failed: ' + err.message); }
+}
+
+async function checkQuality() {
+    if (!currentPostId) return;
+    const reportDiv = document.getElementById('quality-report');
+    const btn = document.getElementById('quality-btn');
+    btn.disabled = true;
+    try {
+        const res = await fetch(`/api/posts/${currentPostId}/quality`, { headers: authHeaders() });
+        const data = await res.json();
+        if (!res.ok) { alert(data.detail || 'Quality check failed'); return; }
+        if (data.message) { alert(data.message); return; }
+        let html = '<div class="card card-glass p-3"><h6 class="mb-2">Quality Report</h6>';
+        html += `<div class="d-flex align-items-center mb-2"><span class="badge bg-${data.overall_score >= 80 ? 'success' : data.overall_score >= 50 ? 'warning' : 'danger'} me-2 fs-6">${data.overall_score}/100</span><span>Overall Score</span></div>`;
+        if (data.resolution) html += `<div class="small mb-1"><strong>Resolution:</strong> ${data.resolution}</div>`;
+        if (data.blur_assessment) html += `<div class="small mb-1"><strong>Sharpness:</strong> ${data.blur_assessment}</div>`;
+        if (data.brightness_assessment) html += `<div class="small mb-1"><strong>Brightness:</strong> ${data.brightness_assessment}</div>`;
+        if (data.duration) html += `<div class="small mb-1"><strong>Duration:</strong> ${data.duration.toFixed(1)}s</div>`;
+        if (data.issues && data.issues.length) {
+            html += '<div class="mt-2 small"><strong>Issues:</strong><ul class="mb-0">';
+            data.issues.forEach(i => html += `<li class="text-warning">${i}</li>`);
+            html += '</ul></div>';
+        }
+        if (data.suggestions && data.suggestions.length) {
+            html += '<div class="small"><strong>Suggestions:</strong><ul class="mb-0">';
+            data.suggestions.forEach(s => html += `<li class="text-info">${s}</li>`);
+            html += '</ul></div>';
+        }
+        html += '</div>';
+        reportDiv.innerHTML = html;
+        reportDiv.classList.remove('d-none');
+    } catch (err) { alert('Quality check failed: ' + err.message); }
+    finally { btn.disabled = false; }
+}
+
+async function doTranslate() {
+    const postId = document.getElementById('translate-post-select').value;
+    const lang = document.getElementById('translate-lang').value;
+    const errDiv = document.getElementById('translate-error');
+    const resultDiv = document.getElementById('translate-result');
+    const spinner = document.getElementById('trans-spinner');
+    const btn = document.getElementById('translate-btn');
+
+    errDiv.classList.add('d-none');
+    resultDiv.classList.add('d-none');
+    if (!postId) { errDiv.textContent = 'Please select a post'; errDiv.classList.remove('d-none'); return; }
+
+    btn.disabled = true; spinner.classList.remove('d-none');
+    try {
+        const fd = new FormData(); fd.append('target_language', lang);
+        const res = await fetch(`/api/posts/${postId}/translate`, { method: 'POST', headers: authHeaders(), body: fd });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Translation failed');
+        document.getElementById('translate-output').value = data.translation;
+        resultDiv.classList.remove('d-none');
+    } catch (err) {
+        errDiv.textContent = err.message; errDiv.classList.remove('d-none');
+    } finally { btn.disabled = false; spinner.classList.add('d-none'); }
+}
+
+async function doRewrite() {
+    const text = document.getElementById('rewrite-input').value;
+    const tone = document.getElementById('rewrite-tone').value;
+    const length = document.getElementById('rewrite-length').value;
+    const errDiv = document.getElementById('rewrite-error');
+    const resultDiv = document.getElementById('rewrite-result');
+    const spinner = document.getElementById('rewrite-spinner');
+    const btn = document.getElementById('rewrite-btn');
+
+    errDiv.classList.add('d-none');
+    resultDiv.classList.add('d-none');
+    if (!text.trim()) { errDiv.textContent = 'Please enter text to rewrite'; errDiv.classList.remove('d-none'); return; }
+
+    btn.disabled = true; spinner.classList.remove('d-none');
+    try {
+        const fd = new FormData(); fd.append('text', text); fd.append('tone', tone); fd.append('length', length);
+        const res = await fetch('/api/posts/rewrite', { method: 'POST', headers: authHeaders(), body: fd });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Rewrite failed');
+        document.getElementById('rewrite-output').value = data.rewritten;
+        resultDiv.classList.remove('d-none');
+    } catch (err) {
+        errDiv.textContent = err.message; errDiv.classList.remove('d-none');
+    } finally { btn.disabled = false; spinner.classList.add('d-none'); }
+}
+
+// ─── Social Media ─────────────────────────────────
+const PLATFORMS = {
+    instagram: { label: 'Instagram', icon: 'bi-instagram', color: '#E4405F', connectText: 'Connect Instagram' },
+    facebook: { label: 'Facebook', icon: 'bi-facebook', color: '#1877F2', connectText: 'Connect Facebook' },
+    linkedin: { label: 'LinkedIn', icon: 'bi-linkedin', color: '#0A66C2', connectText: 'Connect LinkedIn' },
+    twitter: { label: 'X (Twitter)', icon: 'bi-twitter-x', color: '#1D9BF0', connectText: 'Connect X' },
+    threads: { label: 'Threads', icon: 'bi-threads', color: '#E95950', connectText: 'Connect Threads' },
+    youtube: { label: 'YouTube', icon: 'bi-youtube', color: '#FF0000', connectText: 'Connect YouTube' }
+};
+let PLATFORMS_CONFIG = {};
+
+async function loadPlatformsConfig() {
+    try {
+        const res = await fetch('/api/social/platforms', { headers: authHeaders() });
+        if (!res.ok) return;
+        const data = await res.json();
+        PLATFORMS_CONFIG = {};
+        (data.platforms || []).forEach(p => { PLATFORMS_CONFIG[p.platform] = p; });
+    } catch (e) { /* keep empty config */ }
+}
+
+function platformProfileUrl(platform, username) {
+    const u = encodeURIComponent(username || '');
+    const map = {
+        instagram: () => `https://www.instagram.com/${u}/`,
+        facebook: () => `https://www.facebook.com/${u}`,
+        linkedin: () => `https://www.linkedin.com/in/${u}`,
+        twitter: () => `https://x.com/${u}`,
+        threads: () => `https://www.threads.net/@${u}`,
+        youtube: () => `https://www.youtube.com/@${u}`
+    };
+    return (map[platform] || (() => '#'))();
+}
+
+function renderPlatformCards(accounts) {
+    const cardsEl = document.getElementById('social-cards');
+    const connected = {};
+    accounts.forEach(a => { connected[a.platform] = a; });
+    cardsEl.innerHTML = Object.entries(PLATFORMS).map(([key, p]) => {
+        const acc = connected[key];
+        const isConnected = !!acc && acc.is_active;
+        const isConfigured = (PLATFORMS_CONFIG[key] || {}).configured !== false;
+        const statusBadge = isConnected
+            ? '<span class="badge bg-success status-badge"><span class="status-dot"></span> Connected</span>'
+            : (isConfigured
+                ? '<span class="badge bg-secondary status-badge">Not Connected</span>'
+                : '<span class="badge bg-warning text-dark status-badge"><i class="bi bi-exclamation-triangle"></i> Setup required</span>');
+        const connectBtn = isConfigured
+            ? `<button class="btn btn-sm btn-gradient" onclick="connectPlatform('${key}')"><i class="bi bi-plug"></i> ${p.connectText}</button>`
+            : `<button class="btn btn-sm btn-outline-warning" onclick="connectPlatform('${key}')"><i class="bi bi-gear"></i> ${p.label}</button>`;
+        return `
+        <div class="col-md-6 col-lg-4">
+            <div class="card card-glass social-card h-100 ${isConnected ? 'social-connected' : ''}">
+                <div class="card-body text-center">
+                    <div class="social-icon mx-auto mb-3" style="--social-color:${p.color}">
+                        <i class="bi ${p.icon}"></i>
+                    </div>
+                    <h6 class="mb-1">${p.label}</h6>
+                    ${acc ? `<div class="text-muted small mb-1">@${acc.username}${acc.is_demo ? ' <span class="badge bg-info text-dark">Demo</span>' : ''}</div>` : ''}
+                    <div class="mb-3">
+                        ${statusBadge}
+                    </div>
+                    <div class="d-flex flex-wrap justify-content-center gap-1">
+                        ${isConnected
+                            ? `<button class="btn btn-sm btn-outline-danger" onclick="disconnectAccount(${acc.id})"><i class="bi bi-unlink"></i> Disconnect</button>
+                               <button class="btn btn-sm btn-outline-info" onclick="refreshToken(${acc.id})"><i class="bi bi-arrow-repeat"></i> Refresh Token</button>
+                               <button class="btn btn-sm btn-outline-light" onclick="window.open('${platformProfileUrl(key, acc.username)}','_blank')"><i class="bi bi-person-bounding-box"></i> View Profile</button>`
+                            : connectBtn}
+                    </div>
+                </div>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+async function loadSocialAccounts() {
+    const container = document.getElementById('social-accounts-list');
+    const errDiv = document.getElementById('social-error');
+    errDiv.classList.add('d-none');
+    try {
+        await loadPlatformsConfig();
+        const res = await fetch('/api/social/accounts', { headers: authHeaders() });
+        if (!res.ok) throw new Error('Failed to load accounts');
+        const data = await res.json();
+        const accounts = data.accounts || [];
+        renderPlatformCards(accounts);
+        if (!accounts.length) {
+            container.innerHTML = '<p class="text-muted small mt-2">No connected accounts yet. Use the cards above to connect your social media profiles.</p>';
+            document.getElementById('social-post-account').innerHTML = '<option value="">-- No accounts --</option>';
+            document.getElementById('social-schedule-account').innerHTML = '<option value="">-- No accounts --</option>';
+            return;
+        }
+        let html = '';
+        accounts.forEach(acc => {
+            const pic = acc.profile_picture_url
+                ? `<img src="${acc.profile_picture_url}" class="rounded-circle me-2" width="40" height="40" style="object-fit:cover">`
+                : `<i class="bi bi-person-circle fs-3 me-2"></i>`;
+            const badge = acc.supports_publishing
+                ? '<span class="badge bg-success">Can Publish</span>'
+                : '<span class="badge bg-warning text-dark">Manual Only</span>';
+            html += `<div class="d-flex align-items-center justify-content-between mb-2 p-2 border border-secondary rounded">
+                <div class="d-flex align-items-center">
+                    ${pic}
+                    <div>
+                        <strong>@${acc.username}</strong>
+                        ${acc.username.startsWith('demo.') ? '<span class="badge bg-info text-dark ms-1">Demo</span>' : ''}
+                        <div class="text-muted small">${acc.display_name || ''} ${badge}</div>
+                        <span class="text-muted small">${acc.platform} · ${acc.account_type}</span>
+                        ${acc.followers_count ? `<span class="text-muted small ms-2">· ${acc.followers_count.toLocaleString()} followers</span>` : ''}
+                    </div>
+                </div>
+                <button class="btn btn-outline-danger btn-sm" onclick="disconnectAccount(${acc.id})">
+                    <i class="bi bi-unlink"></i> Disconnect
+                </button>
+            </div>`;
+        });
+        container.innerHTML = html;
+        const opts = accounts.map(a => `<option value="${a.id}" data-platform="${a.platform}">@${a.username} (${a.platform})</option>`).join('');
+        document.getElementById('social-post-account').innerHTML = '<option value="">-- Select account --</option>' + opts;
+        document.getElementById('social-schedule-account').innerHTML = '<option value="">-- Select account --</option>' + opts;
+    } catch (err) {
+        container.innerHTML = '<p class="text-muted small">Error loading accounts</p>';
+    }
+}
+
+function connectPlatform(platform) {
+    if (!PLATFORMS[platform]) return;
+    window.location.href = '/connect/' + platform;
+}
+
+function showSocialError(msg) {
+    const errDiv = document.getElementById('social-error');
+    errDiv.textContent = msg;
+    errDiv.classList.remove('d-none');
+    setTimeout(() => errDiv.classList.add('d-none'), 5000);
+}
+
+function showSocialSuccess(msg) {
+    const div = document.getElementById('social-success');
+    div.textContent = msg;
+    div.classList.remove('d-none');
+    setTimeout(() => div.classList.add('d-none'), 5000);
+}
+
+async function disconnectAccount(accountId) {
+    if (!confirm('Disconnect this account?')) return;
+    try {
+        const res = await fetch(`/api/social/accounts/${accountId}`, { method: 'DELETE', headers: authHeaders() });
+        if (!res.ok) throw new Error('Failed to disconnect');
+        showSocialSuccess('Account disconnected');
+        loadSocialAccounts();
+    } catch (err) { showSocialError(err.message); }
+}
+
+async function refreshToken(accountId) {
+    const res = await fetch(`/api/social/accounts/${accountId}/refresh-token`, { method: 'POST', headers: authHeaders() });
+    const data = await res.json();
+    if (!res.ok) { showSocialError(data.detail || 'Token refresh failed'); return; }
+    showSocialSuccess(data.message || 'Token refreshed');
+}
+
+function populateSocialPostSource() {
+    const sel = document.getElementById('social-post-source');
+    sel.innerHTML = '<option value="">-- Select generated post --</option>';
+    const typeIcons = { image: '🖼️', video: '🎬', audio: '🎵', document: '📄', text: '📝' };
+    allPosts.forEach(item => {
+        const icon = typeIcons[item.post.media_type] || '📄';
+        const cap = (item.generated?.caption || item.post.original_text || 'Untitled').substring(0, 50);
+        const opt = document.createElement('option');
+        opt.value = item.post.id;
+        opt.textContent = `${icon} ${cap}`;
+        sel.appendChild(opt);
+    });
+}
+
+async function postToSocial() {
+    const accountId = document.getElementById('social-post-account').value;
+    const postId = document.getElementById('social-post-source').value;
+    const errDiv = document.getElementById('social-post-error');
+    const successDiv = document.getElementById('social-post-success');
+    errDiv.classList.add('d-none');
+    successDiv.classList.add('d-none');
+    if (!accountId) { errDiv.textContent = 'Please select an account'; errDiv.classList.remove('d-none'); return; }
+    if (!postId) { errDiv.textContent = 'Please select a post'; errDiv.classList.remove('d-none'); return; }
+    const post = allPosts.find(p => p.post.id == postId);
+    if (!post) { errDiv.textContent = 'Post not found'; errDiv.classList.remove('d-none'); return; }
+    try {
+        const res = await fetch('/api/social/post-now', {
+            method: 'POST',
+            headers: Object.assign({ 'Content-Type': 'application/json' }, authHeaders()),
+            body: JSON.stringify({
+                account_id: Number(accountId),
+                caption: post.generated?.caption || '',
+                hashtags: post.generated?.hashtags || '',
+                media_path: post.post.media_path || '',
+                media_type: post.post.media_type || 'image',
+                alt_text: post.generated?.alt_text || ''
+            })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Post failed');
+        successDiv.textContent = 'Posted successfully!';
+        if (data.platform_url) successDiv.innerHTML += ` <a href="${data.platform_url}" target="_blank" class="alert-link">View post</a>`;
+        successDiv.classList.remove('d-none');
+        loadSocialSchedule();
+    } catch (err) { errDiv.textContent = err.message; errDiv.classList.remove('d-none'); }
+}
+
+function openPostPreview() {
+    const accountId = document.getElementById('social-post-account').value;
+    const postId = document.getElementById('social-post-source').value;
+    const errDiv = document.getElementById('social-post-error');
+    errDiv.classList.add('d-none');
+    if (!accountId) { errDiv.textContent = 'Please select an account'; errDiv.classList.remove('d-none'); return; }
+    if (!postId) { errDiv.textContent = 'Please select a post'; errDiv.classList.remove('d-none'); return; }
+    window.location.href = '/preview?post_id=' + encodeURIComponent(postId) + '&account_id=' + encodeURIComponent(accountId);
+}
+
+function openScheduleModal() {
+    const accountId = document.getElementById('social-schedule-account').value;
+    if (!accountId) { showSocialError('Please select an account first'); return; }
+    document.getElementById('modal-schedule-account').innerHTML = document.getElementById('social-schedule-account').innerHTML;
+    document.getElementById('modal-schedule-account').value = accountId;
+    document.getElementById('modal-schedule-caption').value = '';
+    document.getElementById('modal-schedule-hashtags').value = '';
+    document.getElementById('modal-schedule-datetime').value = '';
+    document.getElementById('schedule-error').classList.add('d-none');
+    const modal = new bootstrap.Modal(document.getElementById('scheduleModal'));
+    modal.show();
+}
+
+async function confirmSchedule() {
+    const accountId = document.getElementById('modal-schedule-account').value;
+    const caption = document.getElementById('modal-schedule-caption').value;
+    const hashtags = document.getElementById('modal-schedule-hashtags').value;
+    const dt = document.getElementById('modal-schedule-datetime').value;
+    const errDiv = document.getElementById('schedule-error');
+    errDiv.classList.add('d-none');
+    if (!accountId) { errDiv.textContent = 'Please select an account'; errDiv.classList.remove('d-none'); return; }
+    if (!dt) { errDiv.textContent = 'Please select date and time'; errDiv.classList.remove('d-none'); return; }
+    try {
+        const scheduledAt = new Date(dt).toISOString();
+        const res = await fetch('/api/social/schedule', {
+            method: 'POST',
+            headers: Object.assign({ 'Content-Type': 'application/json' }, authHeaders()),
+            body: JSON.stringify({
+                account_id: Number(accountId),
+                caption: caption,
+                hashtags: hashtags,
+                scheduled_at: scheduledAt
+            })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Schedule failed');
+        const modal = bootstrap.Modal.getInstance(document.getElementById('scheduleModal'));
+        modal.hide();
+        loadSocialSchedule();
+    } catch (err) { errDiv.textContent = err.message; errDiv.classList.remove('d-none'); }
+}
+
+async function scheduleSocialPost() {
+    document.getElementById('social-schedule-datetime').value = '';
+    openScheduleModal();
+}
+
+async function loadSocialSchedule() {
+    const container = document.getElementById('social-schedule-list');
+    try {
+        const res = await fetch('/api/social/schedule', { headers: authHeaders() });
+        if (!res.ok) { container.innerHTML = '<p class="text-muted small">Failed to load schedule</p>'; return; }
+        const data = await res.json();
+        const posts = data.scheduled_posts || [];
+        if (!posts.length) { container.innerHTML = '<p class="text-muted small">No scheduled posts.</p>'; return; }
+        let html = '<div class="table-responsive"><table class="table table-sm table-dark"><thead><tr><th>Date</th><th>Caption</th><th>Status</th><th></th></tr></thead><tbody>';
+        posts.forEach(p => {
+            const date = p.scheduled_at ? new Date(p.scheduled_at).toLocaleString() : 'N/A';
+            const statusBadge = { scheduled: 'primary', publishing: 'info', published: 'success', failed: 'danger', cancelled: 'secondary' };
+            const badge = statusBadge[p.status] || 'secondary';
+            html += `<tr><td class="small">${date}</td><td class="small">${p.caption || ''}</td><td><span class="badge bg-${badge}">${p.status}</span></td>`;
+            html += `<td>${p.status === 'scheduled' ? `<button class="btn btn-sm btn-outline-danger" onclick="cancelScheduled(${p.id})"><i class="bi bi-x"></i></button>` : ''}</td></tr>`;
+        });
+        html += '</tbody></table></div>';
+        container.innerHTML = html;
+    } catch { container.innerHTML = '<p class="text-muted small">Error loading schedule</p>'; }
+}
+
+async function cancelScheduled(postId) {
+    if (!confirm('Cancel this scheduled post?')) return;
+    try {
+        await fetch(`/api/social/schedule/${postId}`, { method: 'DELETE', headers: authHeaders() });
+        loadSocialSchedule();
+    } catch (e) { showSocialError('Failed to cancel'); }
+}
+
+// ─── Analytics ──────────────────────────────────
+async function loadAnalytics() {
+    try {
+        const res = await fetch('/api/analytics/overview', { headers: authHeaders() });
+        if (!res.ok) return;
+        const data = await res.json();
+        document.getElementById('ana-total-posts').textContent = data.total_posts || 0;
+        document.getElementById('ana-total-generated').textContent = data.total_generated || 0;
+        document.getElementById('ana-total-published').textContent = data.total_published || 0;
+    } catch {}
+
+    try {
+        const res = await fetch('/api/analytics/content-breakdown', { headers: authHeaders() });
+        if (!res.ok) return;
+        const data = await res.json();
+        document.getElementById('ana-avg-viral').textContent = data.average_viral_score || 0;
+    } catch {}
+
+    try {
+        const res = await fetch('/api/analytics/overview', { headers: authHeaders() });
+        if (!res.ok) return;
+        const data = await res.json();
+        const typesDiv = document.getElementById('ana-content-types');
+        const types = data.posts_by_type || {};
+        const entries = Object.entries(types);
+        if (entries.length) {
+            typesDiv.innerHTML = entries.map(([k, v]) => `<div class="d-flex justify-content-between"><span>${k}</span><span class="badge bg-secondary">${v}</span></div>`).join('');
+        } else {
+            typesDiv.innerHTML = 'No data yet';
+        }
+    } catch {}
+
+    try {
+        const res = await fetch('/api/analytics/engagement', { headers: authHeaders() });
+        if (!res.ok) return;
+        const data = await res.json();
+        const engDiv = document.getElementById('ana-engagement');
+        engDiv.innerHTML = `
+            <div class="d-flex justify-content-between"><span>Likes</span><span>${data.total_likes || 0}</span></div>
+            <div class="d-flex justify-content-between"><span>Comments</span><span>${data.total_comments || 0}</span></div>
+            <div class="d-flex justify-content-between"><span>Shares</span><span>${data.total_shares || 0}</span></div>
+            <div class="d-flex justify-content-between"><span>Impressions</span><span>${data.total_impressions || 0}</span></div>
+            <hr class="my-1">
+            <div class="d-flex justify-content-between"><strong>Engagement Rate</strong><strong>${data.engagement_rate || 0}%</strong></div>
+        `;
+    } catch {}
+}
+
+function populateTranslateSelect() {
+    const sel = document.getElementById('translate-post-select');
+    sel.innerHTML = '<option value="">-- Choose a post --</option>';
+    const typeIcons = { image: 'Image', video: 'Video', audio: 'Audio', document: 'Document', text: 'Text' };
+    allPosts.forEach(item => {
+        const typeName = typeIcons[item.post.media_type] || item.post.media_type;
+        const cap = (item.generated?.caption || item.post.original_text || 'Untitled').substring(0, 50);
+        const opt = document.createElement('option');
+        opt.value = item.post.id;
+        opt.textContent = `${typeName}: ${cap}`;
+        sel.appendChild(opt);
+    });
+}
+
+async function loadHistory() {
+    try {
+        const res = await fetch('/api/posts/history', { headers: authHeaders() });
+        if (!res.ok) return;
+        const data = await res.json();
+        allPosts = data.items || [];
+        populateTranslateSelect();
+        populateSocialPostSource();
+        const container = document.getElementById('history-container');
+        if (!allPosts.length) { container.innerHTML = 'No posts yet.'; return; }
+        let html = '<div class="table-responsive"><table class="table table-sm table-dark"><thead><tr><th>Date</th><th>Type</th><th>Caption</th><th></th></tr></thead><tbody>';
+        for (const item of allPosts) {
+            const date = new Date(item.post.created_at).toLocaleDateString();
+            const cap = (item.generated?.caption || '').substring(0, 60);
+            html += `<tr><td>${date}</td><td><span class="badge bg-secondary">${item.post.media_type}</span></td><td>${cap}...</td>`;
+            html += `<td><button class="btn btn-sm btn-outline-light" onclick="reopenPost(${JSON.stringify(item).replace(/"/g, '&quot;')})"><i class="bi bi-eye"></i></button></td></tr>`;
+        }
+        html += '</tbody></table></div>';
+        container.innerHTML = html;
+    } catch {}
+}
+
+function reopenPost(item) {
+    currentPostId = item.post.id;
+    renderResults(item.generated);
+    document.getElementById('tab-create').querySelector('.nav-link')?.click();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+(async () => {
+    try {
+        const res = await fetch('/api/auth/me', { headers: authHeaders() });
+        if (res.ok) {
+            const user = await res.json();
+            document.getElementById('user-email').textContent = user.email;
+            loadHistory();
+            loadSocialAccounts();
+            loadSocialSchedule();
+            loadAnalytics();
+        } else { clearTokens(); window.location.href = '/login'; }
+    } catch { clearTokens(); window.location.href = '/login'; }
+})();
+</script>
+{% endblock %}

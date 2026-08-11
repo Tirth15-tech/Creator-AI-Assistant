@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+{% block title %}Connecting - ContentAI{% endblock %}
+{% block content %}
+<div class="row justify-content-center align-items-center" style="min-height: 60vh;">
+    <div class="col-md-6 col-lg-5 text-center">
+        <div class="card card-glass p-5" id="connect-card">
+            <div class="spinner-border text-primary mb-4" style="width: 3rem; height: 3rem;" role="status" id="connect-spinner">
+                <span class="visually-hidden">Connecting...</span>
+            </div>
+            <h4 class="mb-2">Connecting to <span id="platform-name">Social</span></h4>
+            <p class="text-muted small mb-0" id="connect-status">Preparing secure OAuth flow...</p>
+
+            <div class="d-none mt-4" id="connect-error">
+                <div class="alert alert-warning text-start small">
+                    <i class="bi bi-exclamation-triangle me-2"></i><span id="connect-error-msg"></span>
+                </div>
+                <a href="/dashboard" class="btn btn-gradient btn-sm"><i class="bi bi-arrow-left"></i> Back to Dashboard</a>
+            </div>
+
+            <div class="d-none mt-4 text-start" id="connect-demo">
+                <div class="alert alert-info small mb-3">
+                    <i class="bi bi-info-circle me-2"></i>
+                    This is a simulated <span id="demo-platform-name">account</span> login.
+                    Enter any username and password to connect.
+                </div>
+                <div class="mb-3">
+                    <label class="form-label" for="demo-username">Username</label>
+                    <input type="text" class="form-control" id="demo-username" name="username" autocomplete="username" value="demo.user" required>
+                </div>
+                <div class="mb-4">
+                    <label class="form-label" for="demo-password">Password</label>
+                    <input type="password" class="form-control" id="demo-password" name="password" autocomplete="current-password" value="demo-password">
+                </div>
+                <button class="btn btn-gradient w-100" id="demo-submit" onclick="submitDemoLogin()">
+                    <i class="bi bi-box-arrow-in-right"></i> Log in to <span id="demo-btn-name">Social</span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+{% block extra_js %}
+<script>
+let demoAuthUrl = null;
+
+function submitDemoLogin() {
+    const username = document.getElementById('demo-username').value.trim();
+    if (!username) {
+        document.getElementById('demo-username').classList.add('is-invalid');
+        return;
+    }
+    const btn = document.getElementById('demo-submit');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Connecting...';
+    window.location.href = demoAuthUrl + '&username=' + encodeURIComponent(username);
+}
+
+(function () {
+    const platform = '{{ platform }}';
+    const platformNames = {
+        instagram: 'Instagram', facebook: 'Facebook', linkedin: 'LinkedIn',
+        twitter: 'X (Twitter)', threads: 'Threads', youtube: 'YouTube'
+    };
+    document.getElementById('platform-name').textContent = platformNames[platform] || platform;
+
+    const token = getToken();
+    if (!token) {
+        window.location.href = '/login';
+        return;
+    }
+
+    function showError(msg) {
+        document.getElementById('connect-spinner').classList.add('d-none');
+        document.getElementById('connect-status').textContent = 'Connection could not be started.';
+        document.getElementById('connect-error-msg').textContent = msg;
+        document.getElementById('connect-error').classList.remove('d-none');
+    }
+
+    function showDemoLogin(authUrl) {
+        demoAuthUrl = authUrl;
+        document.getElementById('connect-spinner').classList.add('d-none');
+        document.getElementById('connect-status').classList.add('d-none');
+        document.getElementById('demo-platform-name').textContent = platformNames[platform] || platform;
+        document.getElementById('demo-btn-name').textContent = platformNames[platform] || platform;
+        document.getElementById('connect-demo').classList.remove('d-none');
+    }
+
+    fetch('/api/social/connect/' + platform, { headers: authHeaders() })
+        .then(async r => {
+            const data = await r.json().catch(() => ({}));
+            if (!r.ok) {
+                showError(data.detail && data.detail.message ? data.detail.message : (data.detail || 'Could not start OAuth flow.'));
+                return null;
+            }
+            return data;
+        })
+        .then(data => {
+            if (!data) return;
+            if (data.demo) {
+                showDemoLogin(data.auth_url);
+            } else if (data.auth_url) {
+                document.getElementById('connect-status').textContent = 'Opening ' + (platformNames[platform] || platform) + ' login...';
+                window.location.href = data.auth_url;
+            } else {
+                showError('Could not start the OAuth flow.');
+            }
+        })
+        .catch(() => {
+            showError('Connection failed. Please try again.');
+        });
+})();
+</script>
+{% endblock %}

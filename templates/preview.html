@@ -1,0 +1,358 @@
+{% extends "base.html" %}
+{% block title %}Post Preview - ContentAI{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h4 class="mb-0"><i class="bi bi-eye"></i> Post Preview</h4>
+    <a href="/dashboard" class="btn btn-outline-light btn-sm"><i class="bi bi-arrow-left"></i> Back to Dashboard</a>
+</div>
+
+<div id="preview-alert" class="alert alert-warning d-none"></div>
+
+<div class="row g-4">
+    <div class="col-lg-5">
+        <div class="card card-glass p-4 mb-4">
+            <h6 class="mb-3"><i class="bi bi-image"></i> Media Preview</h6>
+            <div id="media-preview"><p class="text-muted small mb-0">Loading...</p></div>
+        </div>
+        <div class="card card-glass p-4">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h6 class="mb-0"><i class="bi bi-file-earmark-text"></i> My Drafts</h6>
+                <button class="btn btn-outline-light btn-sm" onclick="loadDrafts()"><i class="bi bi-arrow-clockwise"></i></button>
+            </div>
+            <div id="drafts-list" class="text-muted small">Loading...</div>
+        </div>
+    </div>
+
+    <div class="col-lg-7">
+        <div class="card card-glass p-4">
+            <div class="mb-3">
+                <label class="form-label" for="preview-account">Account</label>
+                <select class="form-select" id="preview-account">
+                    <option value="">-- Select account --</option>
+                </select>
+            </div>
+            <div class="mb-3">
+                <label class="form-label" for="preview-caption">Caption</label>
+                <textarea class="form-control" id="preview-caption" rows="4"></textarea>
+            </div>
+            <div class="mb-3">
+                <label class="form-label" for="preview-hashtags">Hashtags</label>
+                <textarea class="form-control" id="preview-hashtags" rows="2"></textarea>
+            </div>
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label" for="preview-keywords">Keywords</label>
+                    <input type="text" class="form-control" id="preview-keywords">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label" for="preview-cta">CTA</label>
+                    <input type="text" class="form-control" id="preview-cta">
+                </div>
+            </div>
+            <div class="mt-3">
+                <label class="form-label" for="preview-hook">Hook</label>
+                <textarea class="form-control" id="preview-hook" rows="2"></textarea>
+            </div>
+            <div class="mt-3">
+                <label class="form-label" for="preview-seo">SEO Tags</label>
+                <textarea class="form-control" id="preview-seo" rows="2"></textarea>
+            </div>
+        </div>
+
+        <div class="card card-glass p-4 mt-4">
+            <div class="row g-2">
+                <div class="col-md-4">
+                    <button class="btn btn-outline-light w-100" onclick="saveDraft()"><i class="bi bi-save"></i> Save as Draft</button>
+                </div>
+                <div class="col-md-4">
+                    <button class="btn btn-outline-info w-100" onclick="openSchedule()"><i class="bi bi-calendar"></i> Schedule Post</button>
+                </div>
+                <div class="col-md-4">
+                    <button class="btn btn-gradient w-100" onclick="publishNow()"><i class="bi bi-send"></i> Publish Now</button>
+                </div>
+            </div>
+
+            <div class="d-none mt-3" id="schedule-box">
+                <div class="row g-2 align-items-end">
+                    <div class="col-md-8">
+                        <label class="form-label" for="preview-schedule-datetime">Date & Time</label>
+                        <input type="datetime-local" class="form-control" id="preview-schedule-datetime">
+                    </div>
+                    <div class="col-md-4">
+                        <button class="btn btn-info w-100" onclick="confirmSchedule()">Confirm Schedule</button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="publish-result" class="mt-3"></div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let previewPostId = null;
+let previewMediaPath = '';
+let previewMediaType = 'text';
+let currentDraftId = null;
+
+function previewUrl(path) {
+    if (!path) return '';
+    if (path.startsWith('/')) return path;
+    return '/' + path;
+}
+
+function showAlert(msg, error) {
+    const el = document.getElementById('preview-alert');
+    el.textContent = msg;
+    el.className = 'alert ' + (error ? 'alert-danger' : 'alert-success') + ' mt-2';
+    el.classList.remove('d-none');
+    setTimeout(() => el.classList.add('d-none'), 8000);
+}
+
+function collectFields() {
+    return {
+        caption: document.getElementById('preview-caption').value,
+        hashtags: document.getElementById('preview-hashtags').value,
+        keywords: document.getElementById('preview-keywords').value,
+        hook: document.getElementById('preview-hook').value,
+        cta: document.getElementById('preview-cta').value,
+        seo: document.getElementById('preview-seo').value
+    };
+}
+
+function populateFields(f) {
+    document.getElementById('preview-caption').value = f.caption || '';
+    document.getElementById('preview-hashtags').value = f.hashtags || '';
+    document.getElementById('preview-keywords').value = f.keywords || '';
+    document.getElementById('preview-hook').value = f.hook || '';
+    document.getElementById('preview-cta').value = f.cta || '';
+    document.getElementById('preview-seo').value = f.seo || '';
+}
+
+function renderMedia() {
+    const box = document.getElementById('media-preview');
+    if (!previewMediaPath) {
+        box.innerHTML = '<p class="text-muted small mb-0">No media attached.</p>';
+        return;
+    }
+    const src = previewUrl(previewMediaPath);
+    if (previewMediaType === 'image') {
+        box.innerHTML = `<img src="${src}" class="img-fluid rounded" style="max-height:320px;object-fit:contain" alt="preview">`;
+    } else if (previewMediaType === 'video') {
+        box.innerHTML = `<video src="${src}" class="w-100 rounded" controls style="max-height:320px"></video>`;
+    } else if (previewMediaType === 'audio') {
+        box.innerHTML = `<audio src="${src}" class="w-100" controls></audio>`;
+    } else {
+        box.innerHTML = `<div class="text-center py-4"><i class="bi bi-file-earmark-text display-4"></i><p class="text-muted small mt-2 mb-0">${previewMediaType} document</p></div>`;
+    }
+}
+
+function renderAccounts(accounts) {
+    const sel = document.getElementById('preview-account');
+    if (!accounts.length) {
+        sel.innerHTML = '<option value="">-- No connected accounts --</option>';
+        return;
+    }
+    sel.innerHTML = accounts.map(a => {
+        const demo = a.is_demo ? ' (demo)' : '';
+        return `<option value="${a.id}" data-demo="${a.is_demo}">${a.platform} — @${a.username}${demo}</option>`;
+    }).join('');
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('account_id')) {
+        sel.value = params.get('account_id');
+    }
+}
+
+function renderDrafts(drafts) {
+    const box = document.getElementById('drafts-list');
+    if (!drafts.length) { box.innerHTML = '<p class="text-muted small mb-0">No drafts saved yet.</p>'; return; }
+    box.innerHTML = drafts.map(d => `
+        <div class="d-flex justify-content-between align-items-center border-top border-secondary pt-2 mt-2">
+            <div class="me-2">
+                <div class="fw-semibold small">${(d.title || d.caption || 'Untitled').substring(0, 40)}</div>
+                <div class="text-muted" style="font-size:0.75rem">${new Date(d.created_at).toLocaleString()}</div>
+            </div>
+            <div class="d-flex gap-1">
+                <button class="btn btn-sm btn-outline-light" onclick="loadDraft(${d.id})" title="Load draft"><i class="bi bi-upload"></i></button>
+                <button class="btn btn-sm btn-outline-danger" onclick="deleteDraft(${d.id})" title="Delete draft"><i class="bi bi-trash"></i></button>
+            </div>
+        </div>`).join('');
+}
+
+async function loadPreview() {
+    const params = new URLSearchParams(window.location.search);
+    const postId = params.get('post_id');
+    if (!postId) { showAlert('No post selected. Go back and choose a post first.', true); return; }
+    previewPostId = postId;
+    try {
+        const res = await fetch('/api/social/preview/' + postId, { headers: authHeaders() });
+        if (!res.ok) throw new Error('Failed to load preview');
+        const data = await res.json();
+        previewMediaPath = data.post.media_path || '';
+        previewMediaType = data.post.media_type || 'text';
+        renderMedia();
+        renderAccounts(data.accounts || []);
+        renderDrafts(data.drafts || []);
+        if (data.generated) {
+            document.getElementById('preview-caption').value = data.generated.caption || '';
+            document.getElementById('preview-hashtags').value = data.generated.hashtags || '';
+            document.getElementById('preview-keywords').value = data.generated.keywords || '';
+            document.getElementById('preview-hook').value = data.generated.hook || '';
+            document.getElementById('preview-cta').value = data.generated.cta || '';
+            document.getElementById('preview-seo').value = data.generated.seo_tags || '';
+        }
+    } catch (e) { showAlert(e.message, true); }
+}
+
+async function saveDraft() {
+    const f = collectFields();
+    const body = Object.assign({
+        post_id: previewPostId,
+        title: f.caption.substring(0, 60),
+        emojis: '',
+        media_path: previewMediaPath,
+        media_type: previewMediaType
+    }, f);
+    try {
+        const res = await fetch('/api/social/preview/drafts', {
+            method: 'POST',
+            headers: Object.assign({ 'Content-Type': 'application/json' }, authHeaders()),
+            body: JSON.stringify(body)
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Save failed');
+        currentDraftId = data.id;
+        showAlert('Draft saved.');
+        loadDrafts();
+    } catch (e) { showAlert(e.message, true); }
+}
+
+async function loadDrafts() {
+    if (!previewPostId) return;
+    try {
+        const res = await fetch('/api/social/preview/' + previewPostId, { headers: authHeaders() });
+        if (!res.ok) return;
+        const data = await res.json();
+        renderDrafts(data.drafts || []);
+    } catch (e) {}
+}
+
+async function loadDraft(id) {
+    try {
+        const res = await fetch('/api/social/preview/' + previewPostId, { headers: authHeaders() });
+        if (!res.ok) throw new Error('Failed to load drafts');
+        const data = await res.json();
+        const d = (data.drafts || []).find(x => x.id === id);
+        if (!d) throw new Error('Draft not found');
+        populateFields(d);
+        previewMediaPath = d.media_path || previewMediaPath;
+        previewMediaType = d.media_type || previewMediaType;
+        renderMedia();
+        currentDraftId = id;
+        showAlert('Draft loaded. Edit and publish when ready.');
+    } catch (e) { showAlert(e.message, true); }
+}
+
+async function deleteDraft(id) {
+    if (!confirm('Delete this draft?')) return;
+    try {
+        const res = await fetch('/api/social/preview/drafts/' + id, { method: 'DELETE', headers: authHeaders() });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Delete failed');
+        if (currentDraftId === id) currentDraftId = null;
+        showAlert('Draft deleted.');
+        loadDrafts();
+    } catch (e) { showAlert(e.message, true); }
+}
+
+function openSchedule() {
+    const box = document.getElementById('schedule-box');
+    box.classList.toggle('d-none');
+}
+
+async function confirmSchedule() {
+    const accountId = document.getElementById('preview-account').value;
+    const dt = document.getElementById('preview-schedule-datetime').value;
+    if (!accountId) { showAlert('Select an account first.', true); return; }
+    if (!dt) { showAlert('Pick a date and time to schedule.', true); return; }
+    const f = collectFields();
+    try {
+        const res = await fetch('/api/social/schedule', {
+            method: 'POST',
+            headers: Object.assign({ 'Content-Type': 'application/json' }, authHeaders()),
+            body: JSON.stringify({
+                account_id: Number(accountId),
+                caption: f.caption,
+                hashtags: f.hashtags,
+                media_path: previewMediaPath,
+                media_type: previewMediaType,
+                scheduled_at: new Date(dt).toISOString()
+            })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Schedule failed');
+        showAlert('Post scheduled for ' + new Date(data.scheduled_at).toLocaleString() + '.');
+        document.getElementById('schedule-box').classList.add('d-none');
+    } catch (e) { showAlert(e.message, true); }
+}
+
+async function publishNow() {
+    const accountId = document.getElementById('preview-account').value;
+    if (!accountId) { showAlert('Select an account first.', true); return; }
+    const f = collectFields();
+    const btn = document.querySelector('#publish-result ~ button') || document.querySelector('[onclick="publishNow()"]');
+    btn.disabled = true;
+    const orig = btn.innerHTML;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Publishing...';
+    try {
+        const res = await fetch('/api/social/preview/publish', {
+            method: 'POST',
+            headers: Object.assign({ 'Content-Type': 'application/json' }, authHeaders()),
+            body: JSON.stringify({
+                account_id: Number(accountId),
+                caption: f.caption,
+                hashtags: f.hashtags,
+                keywords: f.keywords,
+                hook: f.hook,
+                cta: f.cta,
+                seo: f.seo,
+                media_path: previewMediaPath,
+                media_type: previewMediaType
+            })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Publish failed');
+        const resultBox = document.getElementById('publish-result');
+        if (data.success) {
+            let html = '<div class="alert alert-success mb-0">';
+            html += '<i class="bi bi-check-circle me-2"></i>' + (data.status_text || 'Published successfully');
+            if (data.view_url) {
+                html += ` <a href="${data.view_url}" target="_blank" rel="noopener" class="alert-link">View on ${capitalize(data.platform)}</a>`;
+            }
+            html += '</div>';
+            resultBox.innerHTML = html;
+        } else {
+            resultBox.innerHTML = `<div class="alert alert-danger mb-0"><i class="bi bi-x-circle me-2"></i>${(data.status_text || 'Publish failed')}</div>`;
+        }
+    } catch (e) {
+        document.getElementById('publish-result').innerHTML = `<div class="alert alert-danger mb-0"><i class="bi bi-x-circle me-2"></i>${e.message}</div>`;
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = orig;
+    }
+}
+
+function capitalize(s) {
+    s = s || '';
+    return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+(function () {
+    const token = getToken();
+    if (!token) { window.location.href = '/login'; return; }
+    loadPreview();
+})();
+</script>
+{% endblock %}

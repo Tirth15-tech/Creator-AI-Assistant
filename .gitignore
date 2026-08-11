@@ -1,0 +1,63 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual environment
+venv/
+.venv/
+env/
+
+# Environment
+.env
+
+# Database
+*.db
+*.db-shm
+*.db-wal
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Uploads (keep empty uploads dir)
+uploads/*
+!uploads/.gitkeep
+
+# AI model weights
+*.pt
+*.bin
+*.safetensors
+
+# Alembic
+alembic/versions/*.pyc
+
+# Logs
+*.log
+startup_err.txt
+startup_out.txt
+server_stderr.txt
+server_stdout.txt
+verify_err.txt
+verify_out.txt
+startup_err2.txt
+startup_out2.txt
+
+# Test cache
+.pytest_cache/
+
+# Temporary files
+*.tmp
+*.bak

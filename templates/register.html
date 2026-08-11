@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}Register - ContentAI{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-5 col-lg-4">
+        <div class="card card-glass p-4">
+            <h3 class="text-center mb-4 gradient-text">Create Account</h3>
+            <div id="error-alert" class="alert alert-danger d-none"></div>
+            <form id="register-form">
+                <div class="mb-3">
+                    <label class="form-label" for="email">Email</label>
+                    <input type="email" class="form-control" id="email" name="email" autocomplete="email" required placeholder="you@example.com">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label" for="password">Password</label>
+                    <input type="password" class="form-control" id="password" name="password" autocomplete="new-password" required minlength="6" placeholder="Min 6 characters">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label" for="password2">Confirm Password</label>
+                    <input type="password" class="form-control" id="password2" name="confirm_password" autocomplete="new-password" required placeholder="Confirm password">
+                </div>
+                <button type="submit" class="btn btn-gradient w-100 py-2" id="register-btn">
+                    <span class="spinner-border spinner-border-sm d-none" id="register-spinner"></span>
+                    Create Account
+                </button>
+            </form>
+            <p class="text-center mt-3 text-muted small">
+                Already have an account? <a href="/login" class="text-decoration-none">Sign in</a>
+            </p>
+        </div>
+    </div>
+</div>
+{% endblock %}
+{% block extra_js %}
+<script>
+document.getElementById('register-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = document.getElementById('register-btn');
+    const spinner = document.getElementById('register-spinner');
+    const errAlert = document.getElementById('error-alert');
+    errAlert.classList.add('d-none');
+    const pw = document.getElementById('password').value;
+    const pw2 = document.getElementById('password2').value;
+    if (pw !== pw2) {
+        errAlert.textContent = 'Passwords do not match';
+        errAlert.classList.remove('d-none');
+        return;
+    }
+    btn.disabled = true;
+    spinner.classList.remove('d-none');
+    try {
+        const res = await fetch('/api/auth/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                email: document.getElementById('email').value,
+                password: pw
+            })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Registration failed');
+        window.location.href = '/login';
+    } catch (err) {
+        errAlert.textContent = err.message;
+        errAlert.classList.remove('d-none');
+    } finally {
+        btn.disabled = false;
+        spinner.classList.add('d-none');
+    }
+});
+</script>
+{% endblock %}

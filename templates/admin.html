@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+{% block title %}Admin Panel - ContentAI{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="mb-0"><i class="bi bi-shield-lock"></i> Admin Panel</h2>
+    <a href="/dashboard" class="btn btn-outline-light btn-sm"><i class="bi bi-arrow-left"></i> Dashboard</a>
+</div>
+
+<!-- Stats Cards -->
+<div class="row g-3 mb-4" id="stats-cards">
+    <div class="col-md-3">
+        <div class="card card-glass p-3 text-center">
+            <h3 class="gradient-text mb-0" id="stat-users">-</h3>
+            <small class="text-muted">Total Users</small>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card card-glass p-3 text-center">
+            <h3 class="gradient-text mb-0" id="stat-posts">-</h3>
+            <small class="text-muted">Total Posts</small>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card card-glass p-3 text-center">
+            <h3 class="gradient-text mb-0" id="stat-generated">-</h3>
+            <small class="text-muted">Content Generated</small>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card card-glass p-3 text-center">
+            <h3 class="gradient-text mb-0" id="stat-types">-</h3>
+            <small class="text-muted">Media Types</small>
+        </div>
+    </div>
+</div>
+
+<!-- Users Table -->
+<div class="card card-glass p-4 mb-4">
+    <h5 class="mb-3"><i class="bi bi-people"></i> Users</h5>
+    <div class="table-responsive">
+        <table class="table table-dark table-hover table-sm">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Email</th>
+                    <th>Admin</th>
+                    <th>Banned</th>
+                    <th>Joined</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody id="users-tbody"></tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Recent Posts -->
+<div class="card card-glass p-4">
+    <h5 class="mb-3"><i class="bi bi-clock-history"></i> Recent Posts (All Users)</h5>
+    <div class="table-responsive">
+        <table class="table table-dark table-hover table-sm">
+            <thead>
+                <tr><th>ID</th><th>User</th><th>Type</th><th>Date</th></tr>
+            </thead>
+            <tbody id="posts-tbody"></tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+{% block extra_js %}
+<script>
+async function loadAdmin() {
+    const headers = authHeaders();
+    try {
+        const statsRes = await fetch('/api/admin/stats', { headers });
+        if (!statsRes.ok) { window.location.href = '/'; return; }
+        const stats = await statsRes.json();
+
+        document.getElementById('stat-users').textContent = stats.total_users;
+        document.getElementById('stat-posts').textContent = stats.total_posts;
+        document.getElementById('stat-generated').textContent = stats.total_generated;
+        document.getElementById('stat-types').textContent = Object.keys(stats.posts_by_type).length;
+
+        const postsBody = document.getElementById('posts-tbody');
+        postsBody.innerHTML = '';
+        for (const p of stats.recent_posts) {
+            postsBody.innerHTML += `<tr><td>${p.id}</td><td>${p.user_id}</td><td><span class="badge bg-secondary">${p.media_type}</span></td><td>${new Date(p.created_at).toLocaleDateString()}</td></tr>`;
+        }
+
+        const usersRes = await fetch('/api/admin/users', { headers });
+        const users = await usersRes.json();
+        const usersBody = document.getElementById('users-tbody');
+        usersBody.innerHTML = '';
+        for (const u of users) {
+            const banBtn = u.is_banned
+                ? `<button class="btn btn-outline-success btn-sm" onclick="toggleBan(${u.id}, false)">Unban</button>`
+                : `<button class="btn btn-outline-warning btn-sm" onclick="toggleBan(${u.id}, true)">Ban</button>`;
+            const deleteBtn = `<button class="btn btn-outline-danger btn-sm ms-1" onclick="deleteUser(${u.id})"><i class="bi bi-trash"></i></button>`;
+            const makeAdminBtn = u.is_admin ? '' : `<button class="btn btn-outline-info btn-sm ms-1" onclick="makeAdmin(${u.id})">Make Admin</button>`;
+            usersBody.innerHTML += `<tr>
+                <td>${u.id}</td>
+                <td>${u.email}</td>
+                <td>${u.is_admin ? '<i class="bi bi-check-circle text-success"></i>' : ''}</td>
+                <td>${u.is_banned ? '<i class="bi bi-x-circle text-danger"></i>' : ''}</td>
+                <td>${new Date(u.created_at).toLocaleDateString()}</td>
+                <td>${banBtn}${makeAdminBtn}${deleteBtn}</td>
+            </tr>`;
+        }
+    } catch (err) {
+        console.error('Admin load failed:', err);
+        window.location.href = '/';
+    }
+}
+
+async function toggleBan(userId, ban) {
+    const endpoint = ban ? 'ban' : 'unban';
+    await fetch(`/api/admin/users/${userId}/${endpoint}`, { method: 'POST', headers: authHeaders() });
+    loadAdmin();
+}
+
+async function deleteUser(userId) {
+    if (!confirm('Delete this user and ALL their data? This cannot be undone.')) return;
+    await fetch(`/api/admin/users/${userId}`, { method: 'DELETE', headers: authHeaders() });
+    loadAdmin();
+}
+
+async function makeAdmin(userId) {
+    if (!confirm('Grant admin privileges to this user?')) return;
+    await fetch(`/api/admin/make-admin/${userId}`, { method: 'POST', headers: authHeaders() });
+    loadAdmin();
+}
+
+loadAdmin();
+</script>
+{% endblock %}

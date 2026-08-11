@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}Login - ContentAI{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-5 col-lg-4">
+        <div class="card card-glass p-4">
+            <h3 class="text-center mb-4 gradient-text">Login</h3>
+            <div id="error-alert" class="alert alert-danger d-none"></div>
+            <form id="login-form">
+                <div class="mb-3">
+                    <label class="form-label" for="email">Email</label>
+                    <input type="email" class="form-control" id="email" name="email" autocomplete="email" required placeholder="you@example.com">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label" for="password">Password</label>
+                    <input type="password" class="form-control" id="password" name="password" autocomplete="current-password" required placeholder="Your password">
+                </div>
+                <button type="submit" class="btn btn-gradient w-100 py-2" id="login-btn">
+                    <span class="spinner-border spinner-border-sm d-none" id="login-spinner"></span>
+                    Sign In
+                </button>
+            </form>
+            <p class="text-center mt-3 text-muted small">
+                Don't have an account? <a href="/register" class="text-decoration-none">Sign up</a>
+            </p>
+        </div>
+    </div>
+</div>
+{% endblock %}
+{% block extra_js %}
+<script>
+document.getElementById('login-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = document.getElementById('login-btn');
+    const spinner = document.getElementById('login-spinner');
+    const errAlert = document.getElementById('error-alert');
+    errAlert.classList.add('d-none');
+    btn.disabled = true;
+    spinner.classList.remove('d-none');
+    try {
+        const res = await fetch('/api/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                email: document.getElementById('email').value,
+                password: document.getElementById('password').value
+            })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Login failed');
+        setToken(data.access_token, data.refresh_token);
+        window.location.href = '/dashboard';
+    } catch (err) {
+        errAlert.textContent = err.message;
+        errAlert.classList.remove('d-none');
+    } finally {
+        btn.disabled = false;
+        spinner.classList.add('d-none');
+    }
+});
+</script>
+{% endblock %}
