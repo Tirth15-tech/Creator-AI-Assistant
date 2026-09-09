@@ -277,6 +277,18 @@
             <p class="text-muted small">Loading scheduled posts...</p>
         </div>
     </div>
+
+    <div class="card card-glass p-4 mt-4">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h5 class="mb-0"><i class="bi bi-collection-play"></i> Published Posts</h5>
+            <button class="btn btn-outline-light btn-sm" onclick="loadPublishedHistory()">
+                <i class="bi bi-arrow-clockwise"></i> Refresh
+            </button>
+        </div>
+        <div id="published-history-list">
+            <p class="text-muted small">Loading published posts...</p>
+        </div>
+    </div>
 </div>
 
 <!-- Analytics Tab -->
@@ -767,15 +779,15 @@ function renderPlatformCards(accounts) {
                         <i class="bi ${p.icon}"></i>
                     </div>
                     <h6 class="mb-1">${p.label}</h6>
-                    ${acc ? `<div class="text-muted small mb-1">@${acc.username}${acc.is_demo ? ' <span class="badge bg-info text-dark">Demo</span>' : ''}</div>` : ''}
+                    ${acc ? `<div class="text-muted small mb-1">@${acc.username}${acc.is_demo ? ' <span class="badge bg-info text-dark">Demo</span>' : ''}</div>
+                    <div class="text-muted small mb-1">Account Type: ${acc.account_type || '—'}${acc.platform === 'instagram' && acc.platform_user_id ? ` · ID: ${acc.platform_user_id}` : ''}</div>` : ''}
                     <div class="mb-3">
                         ${statusBadge}
                     </div>
                     <div class="d-flex flex-wrap justify-content-center gap-1">
                         ${isConnected
                             ? `<button class="btn btn-sm btn-outline-danger" onclick="disconnectAccount(${acc.id})"><i class="bi bi-unlink"></i> Disconnect</button>
-                               <button class="btn btn-sm btn-outline-info" onclick="refreshToken(${acc.id})"><i class="bi bi-arrow-repeat"></i> Refresh Token</button>
-                               <button class="btn btn-sm btn-outline-light" onclick="window.open('${platformProfileUrl(key, acc.username)}','_blank')"><i class="bi bi-person-bounding-box"></i> View Profile</button>`
+                               ${(!acc.is_demo && acc.username) ? `<button class="btn btn-sm btn-outline-light" onclick="window.open('${platformProfileUrl(key, acc.username)}','_blank')"><i class="bi bi-person-bounding-box"></i> View Profile</button>` : ''}`
                             : connectBtn}
                     </div>
                 </div>
@@ -863,11 +875,35 @@ async function disconnectAccount(accountId) {
     } catch (err) { showSocialError(err.message); }
 }
 
-async function refreshToken(accountId) {
-    const res = await fetch(`/api/social/accounts/${accountId}/refresh-token`, { method: 'POST', headers: authHeaders() });
-    const data = await res.json();
-    if (!res.ok) { showSocialError(data.detail || 'Token refresh failed'); return; }
-    showSocialSuccess(data.message || 'Token refreshed');
+async function loadPublishedHistory() {
+    const container = document.getElementById('published-history-list');
+    try {
+        const res = await fetch('/api/social/history', { headers: authHeaders() });
+        if (!res.ok) { container.innerHTML = '<p class="text-muted small">Failed to load published posts</p>'; return; }
+        const data = await res.json();
+        const rows = data.history || [];
+        if (!rows.length) { container.innerHTML = '<p class="text-muted small">No published posts yet.</p>'; return; }
+        let html = '<div class="table-responsive"><table class="table table-sm table-dark align-middle"><thead><tr><th>Media</th><th>Platform</th><th>Account</th><th>Caption</th><th>Status</th><th>Published</th><th>Media ID</th><th></th></tr></thead><tbody>';
+        rows.forEach(h => {
+            const thumb = h.media_path
+                ? `<img src="${h.media_path.startsWith('/') ? h.media_path : '/' + h.media_path}" class="rounded" width="44" height="44" style="object-fit:cover" alt="">`
+                : '<span class="text-muted">—</span>';
+            const date = h.posted_at ? new Date(h.posted_at).toLocaleString() : 'N/A';
+            const statusBadge = { published: 'success', failed: 'danger', deleted: 'secondary' };
+            html += `<tr>
+                <td>${thumb}</td>
+                <td class="small text-capitalize">${h.platform || ''}</td>
+                <td class="small">${h.username ? '@' + h.username : ''}</td>
+                <td class="small" style="max-width:260px">${(h.caption || '').substring(0, 80)}${(h.caption || '').length > 80 ? '…' : ''}</td>
+                <td><span class="badge bg-${statusBadge[h.status] || 'secondary'}">${h.status}</span></td>
+                <td class="small">${date}</td>
+                <td class="small font-monospace">${h.platform_post_id || '—'}</td>
+                <td>${h.platform_url && !h.platform_url.includes('demo_') ? `<a href="${h.platform_url}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-light"><i class="bi bi-box-arrow-up-right"></i> View Post</a>` : ''}</td>
+            </tr>`;
+        });
+        html += '</tbody></table></div>';
+        container.innerHTML = html;
+    } catch { container.innerHTML = '<p class="text-muted small">Error loading published posts</p>'; }
 }
 
 function populateSocialPostSource() {
@@ -1103,6 +1139,7 @@ function reopenPost(item) {
             loadHistory();
             loadSocialAccounts();
             loadSocialSchedule();
+            loadPublishedHistory();
             loadAnalytics();
         } else { clearTokens(); window.location.href = '/login'; }
     } catch { clearTokens(); window.location.href = '/login'; }

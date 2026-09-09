@@ -147,6 +147,29 @@ function renderMedia() {
     } else {
         box.innerHTML = `<div class="text-center py-4"><i class="bi bi-file-earmark-text display-4"></i><p class="text-muted small mt-2 mb-0">${previewMediaType} document</p></div>`;
     }
+    renderPublishabilityNotice();
+}
+
+const PUBLISHABLE_MEDIA = ['image', 'video', 'reels', 'carousel'];
+
+function renderPublishabilityNotice() {
+    let notice = document.getElementById('publish-support-notice');
+    if (!notice) {
+        notice = document.createElement('div');
+        notice.id = 'publish-support-notice';
+        notice.className = 'alert alert-warning small mt-3 mb-0';
+        const card = document.getElementById('publish-result').parentElement;
+        card.insertBefore(notice, document.getElementById('publish-result'));
+    }
+    const publishable = PUBLISHABLE_MEDIA.includes(previewMediaType) || previewMediaType === 'text';
+    // text-only posts have no media: they can't be published either, but the
+    // backend message covers that case; only warn for analyzable-but-unpublishable files.
+    if (!publishable) {
+        notice.textContent = 'This file can be analyzed and used to generate content, but it cannot be directly published to Instagram in its current format.';
+        notice.classList.remove('d-none');
+    } else {
+        notice.classList.add('d-none');
+    }
 }
 
 function renderAccounts(accounts) {

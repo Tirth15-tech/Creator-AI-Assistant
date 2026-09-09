@@ -9,6 +9,7 @@ from app.core.database import engine, Base, SessionLocal
 from app.models.user import User
 from app.models.post import Post, GeneratedContent
 from app.models.social import SocialAccount, Draft, ScheduledPost, PostingHistory, Notification
+from app.models.workflow import WorkflowJob
 from app.api.auth import router as auth_router
 from app.api.pages import router as pages_router
 from app.api.posts import router as posts_router
@@ -16,6 +17,7 @@ from app.api.admin import router as admin_router
 from app.api.export import router as export_router
 from app.api.social import router as social_router
 from app.api.analytics import router as analytics_router
+from app.api.workflows import router as workflows_router
 from app.core.rate_limit import RateLimitMiddleware
 
 logging.basicConfig(level=logging.INFO)
@@ -53,6 +55,7 @@ app.include_router(admin_router)
 app.include_router(export_router)
 app.include_router(social_router)
 app.include_router(analytics_router)
+app.include_router(workflows_router)
 
 
 @app.on_event("startup")

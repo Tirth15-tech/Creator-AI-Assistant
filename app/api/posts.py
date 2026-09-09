@@ -91,6 +91,33 @@ async def upload_and_generate(
             raise HTTPException(status_code=400, detail=error)
 
     try:
+        # Optional n8n automation hook: announce a content_generation job so
+        # n8n can orchestrate/enrich processing. ContentAI still runs its own
+        # existing AI pipeline synchronously; n8n is never required. No tokens
+        # or secrets are sent.
+        from app.api.workflows import create_workflow_job
+        from app.services.n8n_client import n8n_enabled, trigger_workflow
+
+        gen_job = None
+        if n8n_enabled():
+            gen_job = create_workflow_job(
+                db,
+                user_id=current_user.id,
+                workflow_type="content_generation",
+                content_id=post.id,
+                payload={"media_type": media_type, "platform": "instagram"},
+            )
+            dispatched = await trigger_workflow(gen_job.job_id, "content_generation", {
+                "content_id": post.id,
+                "file_type": media_type,
+                "workflow_type": "content_generation",
+                "requested_action": "generate_content",
+            })
+            from datetime import datetime, timezone
+            gen_job.status = "dispatched" if dispatched else "processing"
+            gen_job.started_at = datetime.now(timezone.utc)
+            db.commit()
+
         if media_type == "image":
             result = await generate_from_image(media_path, text)
         elif media_type == "document":
@@ -101,6 +128,13 @@ async def upload_and_generate(
             result = await generate_from_audio(media_path, text)
         else:
             result = await generate_from_text(text)
+
+        if gen_job is not None:
+            from datetime import datetime, timezone
+            gen_job.status = "completed"
+            gen_job.completed_at = datetime.now(timezone.utc)
+            gen_job.result = {"generated_by": "contentai_internal_pipeline"}
+            db.commit()
     except ConnectionError as e:
         raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:

@@ -138,10 +138,29 @@ async def _scheduler_loop():
             try:
                 now = datetime.now(timezone.utc)
 
-                due_posts = db.query(ScheduledPost).filter(
+                due_query = db.query(ScheduledPost).filter(
                     ScheduledPost.status == "scheduled",
                     ScheduledPost.scheduled_at <= now,
-                ).all()
+                )
+
+                # Posts delegated to an active n8n workflow are published via
+                # the secure n8n callback, not by this loop (prevents double
+                # publishing). If the n8n job failed/dispatch never happened,
+                # the post is NOT excluded and the local scheduler handles it.
+                try:
+                    from app.models.workflow import WorkflowJob
+                    active_n8n = [
+                        row[0] for row in db.query(WorkflowJob.scheduled_post_id).filter(
+                            WorkflowJob.workflow_type == "publish",
+                            WorkflowJob.status.in_(["pending", "dispatched", "processing"]),
+                        ).all()
+                    ]
+                    if active_n8n:
+                        due_query = due_query.filter(~ScheduledPost.id.in_(active_n8n))
+                except Exception as e:
+                    logger.debug("n8n exclusion check skipped: %s", e)
+
+                due_posts = due_query.all()
 
                 if due_posts:
                     logger.info("Found %d posts due for publishing", len(due_posts))

@@ -71,6 +71,137 @@ def _ready_account(account: SocialAccount) -> SocialAccount:
     return account
 
 
+def _redirect_uri_for(platform: str, request: Request) -> str:
+    """Resolve the OAuth redirect URI for a platform.
+
+    Prefers the platform's configured INSTAGRAM_REDIRECT_URI so the value
+    matches what is registered in the Meta app console (required behind
+    tunnels/proxies); falls back to deriving it from the incoming request.
+    """
+    settings = get_settings()
+    if platform == "instagram":
+        configured = (getattr(settings, "INSTAGRAM_REDIRECT_URI", "") or "").strip()
+        if configured:
+            return configured
+    return str(request.base_url).rstrip("/") + f"/api/social/{platform}/callback"
+
+
+_REFRESH_MARGIN = timedelta(days=7)
+
+
+async def _maybe_refresh_token(db: Session, account: SocialAccount) -> None:
+    """Silently refresh a soon-to-expire long-lived token on the backend.
+
+    Users never need to trigger refresh manually. Failures are logged and
+    ignored — publishing still proceeds with the current token while it is
+    valid, and an expired token is rejected by _account_publish_error().
+    """
+    expires_at = getattr(account, "token_expires_at", None)
+    if not expires_at:
+        return
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    if expires_at > datetime.now(timezone.utc) + _REFRESH_MARGIN:
+        return
+
+    provider = get_provider(PlatformType(account.platform))
+    if not provider:
+        return
+
+    try:
+        token_data = await provider.refresh_token(account)
+    except NotImplementedError:
+        return  # platform has no refresh support; reconnect flow covers it
+    except Exception as e:
+        logger.info("Silent token refresh skipped for account %s: %s", account.id, e)
+        return
+
+    if token_data.get("access_token"):
+        plain = token_data["access_token"]
+        account.access_token = encrypt_token(plain)
+        if token_data.get("refresh_token"):
+            account.refresh_token = encrypt_token(token_data["refresh_token"])
+        if token_data.get("expires_in"):
+            account.token_expires_at = datetime.now(timezone.utc) + timedelta(
+                seconds=int(token_data["expires_in"])
+            )
+        db.commit()
+        # Keep the plaintext token on the instance for immediate provider use.
+        account.access_token = plain
+
+
+_INSTAGRAM_PUBLISHABLE_MEDIA = {"image", "video", "reels", "carousel"}
+
+
+def _instagram_media_error(media_type: str) -> Optional[str]:
+    """Friendly error for media types the official Instagram API cannot publish."""
+    media_type = (media_type or "").lower()
+    if media_type in _INSTAGRAM_PUBLISHABLE_MEDIA or not media_type:
+        return None
+    return (
+        "This file can be analyzed and used to generate content, but it cannot "
+        "be directly published to Instagram in its current format."
+    )
+
+
+def _record_publish_event(
+    db: Session,
+    *,
+    user_id: int,
+    workflow_type: str,
+    content_id=None,
+    scheduled_post_id=None,
+    payload: dict,
+    status: str,
+    result: dict = None,
+    error_message: str = "",
+):
+    """Record a completed publish/schedule event and notify n8n (fire-and-forget).
+
+    Never blocks or fails the calling request: n8n is optional automation.
+    """
+    try:
+        from app.api.workflows import create_workflow_job
+        from app.services.n8n_client import n8n_enabled, trigger_workflow
+
+        safe_payload = {k: v for k, v in payload.items() if isinstance(v, (str, int, float, bool, type(None)))}
+        job = create_workflow_job(
+            db,
+            user_id=user_id,
+            workflow_type=workflow_type,
+            content_id=content_id,
+            scheduled_post_id=scheduled_post_id,
+            payload=safe_payload,
+        )
+
+        final_status = "completed" if status == "completed" else ("failed" if status == "failed" else "processing")
+        now = datetime.now(timezone.utc)
+        job.status = final_status
+        job.started_at = now
+        if final_status in ("completed", "failed"):
+            job.completed_at = now
+        if result:
+            job.result = result
+        if error_message:
+            job.error_message = str(error_message)[:2000]
+        db.commit()
+
+        if n8n_enabled():
+            import asyncio
+            try:
+                loop = asyncio.get_running_loop()
+            except RuntimeError:
+                loop = None
+            if loop is not None:
+                loop.create_task(trigger_workflow(job.job_id, workflow_type, {
+                    **safe_payload,
+                    "status": final_status,
+                    "result": result or {},
+                }))
+    except Exception as e:
+        logger.info("Publish event recording skipped: %s", e)
+
+
 def _account_publish_error(account: SocialAccount) -> Optional[str]:
     """Return a readable error string if an account can't be used to publish.
 
@@ -259,7 +390,7 @@ def connect_platform(
 
     state = secrets.token_urlsafe(32)
     _store_oauth_state(state, current_user.id)
-    redirect_uri = str(request.base_url).rstrip("/") + f"/api/social/{platform}/callback"
+    redirect_uri = _redirect_uri_for(platform, request)
 
     auth_url = provider.get_oauth_url(redirect_uri, state)
 
@@ -301,7 +432,7 @@ async def oauth_callback(
     if not provider:
         return RedirectResponse(url="/dashboard?social_error=unknown_platform")
 
-    redirect_uri = str(request.base_url).rstrip("/") + f"/api/social/{platform}/callback"
+    redirect_uri = _redirect_uri_for(platform, request)
 
     try:
         token_data = await provider.exchange_code(code, redirect_uri)
@@ -398,6 +529,7 @@ def list_accounts(
             "id": acc.id,
             "platform": acc.platform,
             "account_type": acc.account_type,
+            "platform_user_id": acc.platform_user_id if not is_demo_account(acc) else "",
             "username": acc.username,
             "display_name": acc.display_name,
             "profile_picture_url": acc.profile_picture_url,
@@ -414,7 +546,7 @@ def list_accounts(
 
 
 @router.delete("/accounts/{account_id}")
-def disconnect_account(
+async def disconnect_account(
     account_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -428,7 +560,20 @@ def disconnect_account(
     if not account:
         raise HTTPException(status_code=404, detail="Account not found")
 
+    # Best-effort server-side revoke so Meta stops honoring the token.
+    try:
+        provider = get_provider(PlatformType(account.platform))
+        if provider:
+            _ready_account(account)
+            await provider.disconnect(account)
+    except Exception as e:
+        logger.info("Token revoke on disconnect skipped for account %s: %s", account.id, e)
+
     account.is_active = False
+    # Invalidate stored credentials immediately; reconnect issues new ones.
+    account.access_token = None
+    account.refresh_token = None
+    account.token_expires_at = None
     db.commit()
 
     # Notify
@@ -654,7 +799,7 @@ def delete_draft(
 # ─────────────────────────────────────
 
 @router.post("/schedule")
-def schedule_post(
+async def schedule_post(
     data: ScheduleCreate,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -669,6 +814,13 @@ def schedule_post(
 
     if not account:
         raise HTTPException(status_code=404, detail="Social account not found")
+
+    media_error = (
+        _instagram_media_error(data.media_type)
+        if account.platform == "instagram" else None
+    )
+    if media_error:
+        raise HTTPException(status_code=400, detail=media_error)
 
     # Parse scheduled_at
     try:
@@ -711,10 +863,52 @@ def schedule_post(
     ))
     db.commit()
 
+    # Optional n8n scheduling automation: n8n waits until the scheduled time
+    # and calls back the secure backend, which re-validates ownership and runs
+    # the real publish. If n8n is disabled or unreachable the built-in local
+    # scheduler publishes the post instead (single-execution is guaranteed by
+    # the scheduled->publishing status transition).
+    n8n_dispatched = False
+    try:
+        from app.api.workflows import create_workflow_job
+        from app.services.n8n_client import n8n_enabled, trigger_workflow
+
+        if n8n_enabled():
+            job = create_workflow_job(
+                db,
+                user_id=current_user.id,
+                workflow_type="publish",
+                scheduled_post_id=scheduled.id,
+                payload={
+                    "platform": account.platform,
+                    "scheduled_at": scheduled_at.isoformat(),
+                    "media_type": data.media_type,
+                },
+            )
+            dispatched = await trigger_workflow(job.job_id, "publish", {
+                "action": "publish_due",
+                "scheduled_post_id": scheduled.id,
+                "scheduled_at": scheduled_at.isoformat(),
+                "platform": account.platform,
+            })
+            if dispatched:
+                job.status = "dispatched"
+                job.started_at = datetime.now(timezone.utc)
+                db.commit()
+                n8n_dispatched = True
+            else:
+                job.status = "failed"
+                job.error_message = "n8n webhook unavailable; local scheduler will publish"
+                job.completed_at = datetime.now(timezone.utc)
+                db.commit()
+    except Exception as e:
+        logger.info("n8n schedule dispatch skipped for post %s: %s", scheduled.id, e)
+
     return {
         "id": scheduled.id,
         "message": "Post scheduled",
         "scheduled_at": scheduled_at.isoformat(),
+        "automation": "n8n" if n8n_dispatched else "internal",
     }
 
 
@@ -800,7 +994,15 @@ async def publish_now(
     if ready_error:
         raise HTTPException(status_code=400, detail=ready_error)
 
+    media_error = (
+        _instagram_media_error(post.media_type)
+        if account.platform == "instagram" else None
+    )
+    if media_error:
+        raise HTTPException(status_code=400, detail=media_error)
+
     _ready_account(account)
+    await _maybe_refresh_token(db, account)
 
     # Attempt immediate publish
     try:
@@ -881,7 +1083,15 @@ async def post_now(
     if ready_error:
         raise HTTPException(status_code=400, detail=ready_error)
 
+    media_error = (
+        _instagram_media_error(data.media_type)
+        if account.platform == "instagram" else None
+    )
+    if media_error:
+        raise HTTPException(status_code=400, detail=media_error)
+
     _ready_account(account)
+    await _maybe_refresh_token(db, account)
 
     payload = PostPayload(
         caption=data.caption,
@@ -907,6 +1117,22 @@ async def post_now(
         ))
         db.commit()
 
+    # Optional n8n automation hook (never blocks the response).
+    if not is_demo_account(account):
+        _record_publish_event(
+            db,
+            user_id=current_user.id,
+            workflow_type="publish",
+            payload={
+                "platform": account.platform,
+                "media_type": data.media_type,
+                "success": result.success,
+            },
+            status="completed" if result.success else "failed",
+            result={"platform_post_id": result.platform_post_id or ""},
+            error_message=result.error_message or "",
+        )
+
     return {
         "success": result.success,
         "platform_post_id": result.platform_post_id,
@@ -929,10 +1155,18 @@ def list_history(
         PostingHistory.user_id == current_user.id,
     ).order_by(PostingHistory.posted_at.desc()).limit(50).all()
 
+    account_ids = {h.account_id for h in history}
+    accounts = {
+        a.id: a for a in db.query(SocialAccount).filter(
+            SocialAccount.id.in_(account_ids)
+        ).all()
+    } if account_ids else {}
+
     return {
         "history": [{
             "id": h.id,
-            "platform": "instagram",  # derive from account
+            "platform": accounts[h.account_id].platform if h.account_id in accounts else "instagram",
+            "username": accounts[h.account_id].username if h.account_id in accounts else "",
             "platform_post_id": h.platform_post_id,
             "platform_url": h.platform_url,
             "caption": h.caption[:80] + "..." if len(h.caption or "") > 80 else h.caption,
@@ -976,6 +1210,7 @@ async def get_post_metrics(
         raise HTTPException(status_code=400, detail="Platform not available")
 
     _ready_account(account)
+    await _maybe_refresh_token(db, account)
 
     try:
         metrics = await provider.get_post_metrics(account, history.platform_post_id)
@@ -1317,7 +1552,15 @@ async def preview_publish(
     if ready_error:
         raise HTTPException(status_code=400, detail=ready_error)
 
+    media_error = (
+        _instagram_media_error(data.media_type)
+        if account.platform == "instagram" else None
+    )
+    if media_error:
+        raise HTTPException(status_code=400, detail=media_error)
+
     _ready_account(account)
+    await _maybe_refresh_token(db, account)
 
     payload = PostPayload(
         caption=data.caption,
@@ -1337,6 +1580,15 @@ async def preview_publish(
         raise HTTPException(status_code=400, detail=f"Publish failed: {e}")
 
     if not result.success:
+        if not is_demo_account(account):
+            _record_publish_event(
+                db,
+                user_id=current_user.id,
+                workflow_type="publish",
+                payload={"platform": account.platform, "media_type": data.media_type},
+                status="failed",
+                error_message=result.error_message or "",
+            )
         return {
             "success": False,
             "platform": account.platform,
@@ -1360,6 +1612,16 @@ async def preview_publish(
         media_type=data.media_type,
     ))
     db.commit()
+
+    if not is_demo:
+        _record_publish_event(
+            db,
+            user_id=current_user.id,
+            workflow_type="publish",
+            payload={"platform": account.platform, "media_type": data.media_type},
+            status="completed",
+            result={"platform_post_id": result.platform_post_id or ""},
+        )
 
     return {
         "success": True,

@@ -226,6 +226,53 @@ class InstagramProvider(SocialProvider):
         """Instagram Graph API does not expose per-post metrics with these scopes."""
         return {"likes": 0, "comments": 0, "shares": 0, "impressions": 0, "reach": 0}
 
+    async def disconnect(self, account: SocialAccount) -> bool:
+        """Best-effort: revoke the app's authorization server-side.
+
+        Uses DELETE /me/permissions with the stored token. Failures are
+        ignored — the local connection is invalidated regardless.
+        """
+        token = getattr(account, "access_token", "") or ""
+        if not token:
+            return True
+        try:
+            async with httpx.AsyncClient(timeout=15) as client:
+                await client.delete(
+                    _graph_url("me/permissions"),
+                    params={"access_token": token},
+                )
+        except Exception as e:
+            logger.info("Instagram permission revoke skipped: %s", e)
+        return True
+
+    async def refresh_token(self, account: SocialAccount) -> dict:
+        """Exchange a long-lived token for a fresh long-lived token.
+
+        Instagram/Facebook long-lived user tokens can be renewed at any time
+        via the fb_exchange_token grant (requires valid, unexpired token).
+        Runs automatically on the backend; users never trigger it manually.
+        """
+        token = getattr(account, "access_token", "") or ""
+        if not token:
+            raise RuntimeError("No access token stored for this account.")
+
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.get(
+                _graph_url("oauth/access_token"),
+                params={
+                    "grant_type": "fb_exchange_token",
+                    "client_id": settings.INSTAGRAM_CLIENT_ID,
+                    "client_secret": settings.INSTAGRAM_CLIENT_SECRET,
+                    "fb_exchange_token": token,
+                },
+            )
+        _raise_graph_error(resp, "token refresh")
+        data = resp.json()
+        return {
+            "access_token": data.get("access_token", ""),
+            "expires_in": int(data.get("expires_in", 0) or 0),
+        }
+
     def supports_publishing(self, account_type: str) -> bool:
         """Business and Creator accounts support publishing; Personal do not."""
         return (account_type or "").lower() in ("business", "creator")

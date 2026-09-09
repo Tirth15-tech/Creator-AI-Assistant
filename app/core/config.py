@@ -82,6 +82,14 @@ class Settings(BaseSettings):
     # Scheduling
     SCHEDULER_INTERVAL_SECONDS: int = 60  # how often the scheduler checks for due posts
 
+    # n8n automation layer (optional). When enabled, ContentAI notifies the
+    # n8n webhook about jobs and delegates scheduled publishing orchestration.
+    # All secrets stay in ContentAI; n8n only orchestrates and calls back.
+    N8N_ENABLED: bool = False
+    N8N_BASE_URL: str = ""                 # e.g. http://localhost:5678 (no trailing slash)
+    N8N_WEBHOOK_SECRET: str = ""           # shared secret for signing both directions
+    N8N_TIMEOUT_SECONDS: float = 10.0
+
     model_config = {
         "env_file": str(_BASE_DIR / ".env"),
         "env_file_encoding": "utf-8",
