@@ -4,7 +4,7 @@ Full-stack web application that analyzes uploaded images, video, audio, document
 then generates optimized social media content: captions, hashtags, keywords, emojis, hooks,
 CTAs, SEO tags, summaries, and translations.
 
-## Tech Stack
+## Tech Stack of project
 
 - **Frontend:** HTML5, CSS3, Bootstrap 5, vanilla JavaScript
 - **Backend:** Python, FastAPI, Uvicorn
