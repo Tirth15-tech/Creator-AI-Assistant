@@ -26,23 +26,6 @@ def is_demo_account(account) -> bool:
     return str(getattr(account, "platform_user_id", "") or "").startswith(DEMO_ACCOUNT_PREFIX)
 
 
-def demo_publish_result(account) -> PublishResult:
-    """Simulate a successful publish for demo accounts."""
-    platform = getattr(account, "platform", "social")
-    if hasattr(platform, "value"):
-        platform = platform.value
-    pid = f"demo_{uuid4().hex[:12]}"
-    urls = {
-        "instagram": f"https://www.instagram.com/p/{pid}/",
-        "facebook": f"https://www.facebook.com/{pid}",
-        "linkedin": f"https://www.linkedin.com/feed/update/{pid}",
-        "twitter": f"https://x.com/demo/status/{pid}",
-        "threads": f"https://www.threads.net/@demo/post/{pid}",
-        "youtube": f"https://www.youtube.com/watch?v={pid}",
-    }
-    return PublishResult(success=True, platform_post_id=pid, platform_url=urls.get(platform, "#"))
-
-
 class PlatformType(str, Enum):
     """Supported social media platforms."""
     INSTAGRAM = "instagram"
@@ -95,6 +78,23 @@ class PublishResult:
     platform_url: str = ""
     error_message: str = ""
     error_code: str = ""
+
+
+def demo_publish_result(account) -> PublishResult:
+    """Simulate a successful publish for demo accounts."""
+    platform = getattr(account, "platform", "social")
+    if hasattr(platform, "value"):
+        platform = platform.value
+    pid = f"demo_{uuid4().hex[:12]}"
+    urls = {
+        "instagram": f"https://www.instagram.com/p/{pid}/",
+        "facebook": f"https://www.facebook.com/{pid}",
+        "linkedin": f"https://www.linkedin.com/feed/update/{pid}",
+        "twitter": f"https://x.com/demo/status/{pid}",
+        "threads": f"https://www.threads.net/@demo/post/{pid}",
+        "youtube": f"https://www.youtube.com/watch?v={pid}",
+    }
+    return PublishResult(success=True, platform_post_id=pid, platform_url=urls.get(platform, "#"))
 
 
 @dataclass
