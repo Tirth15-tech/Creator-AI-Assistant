@@ -96,7 +96,10 @@ function submitDemoLogin() {
         })
         .then(data => {
             if (!data) return;
-            if (data.demo) {
+            if (data.redirect) {
+                document.getElementById('connect-status').textContent = 'Connected! Redirecting...';
+                window.location.href = data.redirect;
+            } else if (data.demo) {
                 showDemoLogin(data.auth_url);
             } else if (data.auth_url) {
                 document.getElementById('connect-status').textContent = 'Opening ' + (platformNames[platform] || platform) + ' login...';

@@ -5,6 +5,13 @@ os.environ["RATE_LIMIT_ENABLED"] = "false"
 # keeps SOCIAL_DEMO_MODE=false for real Instagram testing; tests opt into demo
 # mode here. Environment variables take precedence over the .env file.
 os.environ["SOCIAL_DEMO_MODE"] = "true"
+# Keep the developer's real Instagram credentials (INSTAGRAM_CLIENT_ID /
+# INSTAGRAM_CLIENT_SECRET / INSTAGRAM_ACCESS_TOKEN in .env) out of tests:
+# they would otherwise turn connect/instagram into the real OAuth or bootstrap
+# path. Tests exercise the unconfigured + demo flows instead.
+os.environ["INSTAGRAM_CLIENT_ID"] = ""
+os.environ["INSTAGRAM_CLIENT_SECRET"] = ""
+os.environ["INSTAGRAM_ACCESS_TOKEN"] = ""
 
 import pytest
 from fastapi.testclient import TestClient

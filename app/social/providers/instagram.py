@@ -42,8 +42,21 @@ def _api_version() -> str:
     return getattr(settings, "INSTAGRAM_API_VERSION", "v22.0").strip() or "v22.0"
 
 
-def _graph_url(node: str) -> str:
-    return f"{INSTAGRAM_GRAPH_URL}/{_api_version()}/{node}"
+def _api_host(access_token: str = "") -> str:
+    """Pick the API host for a token.
+
+    Standalone Instagram tokens (IGAA… / IGQVJ… from Instagram Login or the
+    Basic Display API) are served by graph.instagram.com. Tokens issued by the
+    Facebook Login flow work on graph.facebook.com.
+    """
+    token_prefix = (access_token or "").strip().upper()
+    if token_prefix.startswith(("IGQVJ", "IGAA")):
+        return "https://graph.instagram.com"
+    return INSTAGRAM_GRAPH_URL
+
+
+def _graph_url(node: str, access_token: str = "") -> str:
+    return f"{_api_host(access_token)}/{_api_version()}/{node}"
 
 
 class InstagramProvider(SocialProvider):
@@ -113,6 +126,9 @@ class InstagramProvider(SocialProvider):
 
     async def get_account_info(self, access_token: str) -> dict:
         """Get the connected Instagram Business/Creator account information."""
+        if (access_token or "").strip().upper().startswith(("IGQVJ", "IGAA")):
+            return await self._get_ig_me_info(access_token)
+
         async with httpx.AsyncClient(timeout=15) as client:
             # 1. Find the Facebook Pages that expose an Instagram business account.
             pages_resp = await client.get(
@@ -147,6 +163,49 @@ class InstagramProvider(SocialProvider):
                 "followers_count": int(ig_account.get("followers_count", 0) or 0),
                 "media_count": int(ig_account.get("media_count", 0) or 0),
                 "account_type": (ig_account.get("account_type") or "business").lower(),
+                "bio": "",
+            }
+
+    async def _get_ig_me_info(self, access_token: str) -> dict:
+        """Resolve account info for a standalone Instagram token via /me.
+
+        Works with long-lived tokens from Instagram Login (IGAA…) and the
+        Basic Display API (IGQVJ…) — no Facebook App/OAuth required.
+        """
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.get(
+                _graph_url("me", access_token),
+                params={
+                    "fields": "id,username,account_type,media_count",
+                    "access_token": access_token,
+                },
+            )
+            _raise_graph_error(resp, "fetching Instagram profile")
+            data = resp.json()
+
+            ig_id = str(data.get("id") or "").strip()
+            if not ig_id:
+                raise RuntimeError(
+                    "Instagram did not return an account id for this token. "
+                    "Check that the token is valid and not expired."
+                )
+
+            raw_type = (data.get("account_type") or "").lower().replace("_", " ").strip()
+            if raw_type in ("business", "brand", "professional", "prof"):
+                account_type = "business"
+            elif raw_type in ("creator", "creators", "media creator", "reels", "content creator"):
+                account_type = "creator"
+            else:
+                account_type = "personal"
+
+            return {
+                "platform_user_id": ig_id,
+                "username": data.get("username", ""),
+                "display_name": data.get("username", ""),
+                "profile_picture_url": "",
+                "followers_count": 0,
+                "media_count": int(data.get("media_count", 0) or 0),
+                "account_type": account_type,
                 "bio": "",
             }
 
@@ -332,7 +391,7 @@ class InstagramProvider(SocialProvider):
 
     async def _create_container(self, ig_user_id: str, data: dict) -> str:
         async with httpx.AsyncClient(timeout=60) as client:
-            resp = await client.post(_graph_url(f"{ig_user_id}/media"), data=data)
+            resp = await client.post(_graph_url(f"{ig_user_id}/media", data["access_token"]), data=data)
             _raise_graph_error(resp, "creating media container")
             return str(resp.json().get("id", ""))
 
@@ -347,7 +406,7 @@ class InstagramProvider(SocialProvider):
             await asyncio.sleep(_MEDIA_STATUS_POLL_SECONDS)
             async with httpx.AsyncClient(timeout=15) as client:
                 resp = await client.get(
-                    _graph_url(str(creation_id)),
+                    _graph_url(str(creation_id), token),
                     params={"fields": "status_code", "access_token": token},
                 )
                 _raise_graph_error(resp, "checking media status")
@@ -367,7 +426,7 @@ class InstagramProvider(SocialProvider):
     async def _publish_container(self, ig_user_id: str, creation_id: str, token: str) -> str:
         async with httpx.AsyncClient(timeout=60) as client:
             resp = await client.post(
-                _graph_url(f"{ig_user_id}/media_publish"),
+                _graph_url(f"{ig_user_id}/media_publish", token),
                 data={"creation_id": creation_id, "access_token": token},
             )
             _raise_graph_error(resp, "publishing media")
@@ -382,7 +441,7 @@ class InstagramProvider(SocialProvider):
         for _ in range(5):
             async with httpx.AsyncClient(timeout=15) as client:
                 resp = await client.get(
-                    _graph_url(str(media_id)),
+                    _graph_url(str(media_id), token),
                     params={"fields": "permalink", "access_token": token},
                 )
                 if resp.status_code < 400:
@@ -452,7 +511,7 @@ def _build_caption(caption: str, hashtags: str) -> str:
 def _media_url(media_path: str) -> str:
     """Build an absolute, publicly reachable URL for a media path."""
     base = (getattr(settings, "PUBLIC_BASE_URL", "") or "").rstrip("/")
-    path = (media_path or "").lstrip("/")
+    path = (media_path or "").replace("\\", "/").lstrip("/")
     return f"{base}/{path}"
 
 

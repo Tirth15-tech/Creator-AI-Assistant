@@ -44,6 +44,19 @@ def platform_credentials_missing(platform: str) -> list[str]:
     return missing
 
 
+def platform_configured(platform: str) -> bool:
+    """True when a platform can be connected.
+
+    The OAuth credential env vars OR (for Instagram) a bootstrapped
+    long-lived access token (INSTAGRAM_ACCESS_TOKEN) count as configured.
+    """
+    if not platform_credentials_missing(platform):
+        return True
+    if platform == "instagram":
+        return bool(getattr(get_settings(), "INSTAGRAM_ACCESS_TOKEN", ""))
+    return False
+
+
 def platform_config_errors(platform: str) -> list[str]:
     """Return a list of human-readable config problems for a platform.
 
@@ -94,7 +107,7 @@ def get_supported_platforms() -> list[dict]:
             "platform": platform_type.value,
             "name": provider.name,
             "supports_publishing": True,
-            "configured": not platform_credentials_missing(platform_type.value),
+            "configured": platform_configured(platform_type.value),
         })
     return result
 

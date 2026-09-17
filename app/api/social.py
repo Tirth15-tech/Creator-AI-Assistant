@@ -329,6 +329,10 @@ class PostNow(BaseModel):
     location: str = ""
 
 
+class InstagramTokenImport(BaseModel):
+    access_token: str = ""
+
+
 # ─────────────────────────────────────
 # Supported Platforms
 # ─────────────────────────────────────
@@ -344,10 +348,11 @@ def list_platforms():
 # ─────────────────────────────────────
 
 @router.get("/connect/{platform}")
-def connect_platform(
+async def connect_platform(
     platform: str,
     request: Request,
     current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
     """Start OAuth connection for a platform. Returns a redirect URL."""
     try:
@@ -358,6 +363,27 @@ def connect_platform(
     provider = get_provider(platform_type)
     if not provider:
         raise HTTPException(status_code=404, detail=f"Platform '{platform}' not supported")
+
+    # LIVE Instagram token takes precedence over the OAuth redirect and demo
+    # mode: connect directly using the configured long-lived access token
+    # (INSTAGRAM_ACCESS_TOKEN). The token IS the connection, so no Facebook
+    # login popup is needed.
+    if platform_type.value == "instagram":
+        cfg_token = (getattr(get_settings(), "INSTAGRAM_ACCESS_TOKEN", "") or "").strip()
+        if cfg_token:
+            try:
+                await _import_instagram_token(db, current_user.id, cfg_token)
+            except HTTPException:
+                raise
+            except Exception as e:
+                logger.error("Instagram bootstrap import failed: %s", e)
+                raise HTTPException(status_code=400, detail=f"Instagram connect failed: {e}")
+            return {
+                "redirect": "/dashboard?social_connected=true&platform=instagram&imported=true",
+                "platform": "instagram",
+                "demo": False,
+                "bootstrap": True,
+            }
 
     missing = platform_credentials_missing(platform_type.value)
     if missing:
@@ -499,6 +525,111 @@ async def oauth_callback(
     except Exception as e:
         logger.error("OAuth callback failed for %s: %s", platform, e)
         return RedirectResponse(url=f"/dashboard?social_error={str(e)}")
+
+
+# ─────────────────────────────────────
+# Direct token import (no OAuth flow)
+# ─────────────────────────────────────
+
+@router.post("/import/instagram")
+async def import_instagram_token(
+    data: InstagramTokenImport,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Import a long-lived Instagram access token directly (no OAuth flow).
+
+    An empty body falls back to INSTAGRAM_ACCESS_TOKEN from .env.
+    """
+    token = (data.access_token or "").strip()
+    if not token:
+        token = (getattr(get_settings(), "INSTAGRAM_ACCESS_TOKEN", "") or "").strip()
+    if not token:
+        raise HTTPException(status_code=400, detail="access_token is required")
+
+    account = await _import_instagram_token(db, current_user.id, token)
+    provider = get_provider(PlatformType.INSTAGRAM)
+
+    return {
+        "success": True,
+        "message": "Instagram connected",
+        "account": {
+            "id": account.id,
+            "platform": "instagram",
+            "username": account.username,
+            "account_type": account.account_type,
+            "platform_user_id": account.platform_user_id,
+            "followers_count": account.followers_count,
+            "supports_publishing": provider.supports_publishing(account.account_type),
+            "imported": True,
+        },
+    }
+
+
+async def _import_instagram_token(db: Session, user_id: int, token: str):
+    """Validate an Instagram long-lived token and upsert the connected account.
+
+    Shared by the import endpoint and the /connect/instagram bootstrap path.
+    Stores the token encrypted, like an OAuth-connected account.
+    """
+    provider = get_provider(PlatformType.INSTAGRAM)
+    if not provider:
+        raise HTTPException(status_code=400, detail="Instagram provider not available")
+
+    try:
+        account_info = await provider.get_account_info(token)
+    except Exception as e:
+        logger.error("Instagram token import validation failed: %s", e)
+        raise HTTPException(status_code=400, detail=f"Token validation failed: {e}")
+
+    platform_user_id = account_info.get("platform_user_id", "")
+    if not platform_user_id:
+        raise HTTPException(status_code=400, detail="Instagram did not return an account id.")
+
+    account = db.query(SocialAccount).filter(
+        SocialAccount.user_id == user_id,
+        SocialAccount.platform == "instagram",
+        SocialAccount.platform_user_id == platform_user_id,
+    ).first()
+
+    if account is None:
+        account = SocialAccount(
+            user_id=user_id,
+            platform="instagram",
+            account_type=account_info.get("account_type", "personal"),
+            platform_user_id=platform_user_id,
+            username=account_info.get("username", platform_user_id),
+            display_name=account_info.get("display_name", ""),
+            profile_picture_url=account_info.get("profile_picture_url", ""),
+            followers_count=account_info.get("followers_count", 0) or 0,
+            access_token=encrypt_token(token),
+            token_expires_at=None,
+            raw_data={"imported": True, "media_count": account_info.get("media_count", 0)},
+            is_active=True,
+        )
+        db.add(account)
+    else:
+        account.is_active = True
+        account.account_type = account_info.get("account_type", "personal")
+        account.username = account_info.get("username", account.username)
+        account.display_name = account_info.get("display_name", account.display_name)
+        account.profile_picture_url = account_info.get("profile_picture_url", account.profile_picture_url)
+        account.followers_count = account_info.get("followers_count", account.followers_count) or 0
+        account.access_token = encrypt_token(token)
+        account.raw_data = {"imported": True, "media_count": account_info.get("media_count", 0)}
+
+    db.commit()
+    db.refresh(account)
+
+    db.add(Notification(
+        user_id=user_id,
+        title="Instagram Connected",
+        message=f"Your Instagram account @{account.username} has been connected with an imported access token.",
+        notification_type="success",
+    ))
+    db.commit()
+
+    return account
 
 
 # ─────────────────────────────────────

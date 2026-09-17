@@ -45,6 +45,10 @@ class Settings(BaseSettings):
     INSTAGRAM_REDIRECT_URI: str = "http://localhost:8000/api/social/instagram/callback"
     INSTAGRAM_API_VERSION: str = "v22.0"
     INSTAGRAM_SCOPES: str = "instagram_basic,instagram_content_publish,pages_show_list"
+    # Optional: a long-lived Instagram access token (IGAA…) imported directly,
+    # bypassing the OAuth connect flow. The import endpoint validates it and
+    # stores it encrypted on the account, like an OAuth token.
+    INSTAGRAM_ACCESS_TOKEN: str = ""
 
     FACEBOOK_APP_ID: str = ""
     FACEBOOK_APP_SECRET: str = ""
